@@ -4,8 +4,13 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
     const asset = document.getElementById('asset').value;
     const formula = document.getElementById('formula').value;
+    const resultElement = document.getElementById('result');
 
     try {
+        if (asset === "") {
+            return resultElement.textContent = "Please enter a valid asset ticker symbol"
+        }
+
         const response = await fetch('/check-profitability', {
             method: 'POST',
             headers: {
@@ -16,7 +21,6 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
         if (response.ok) {
             const data = await response.json();
-            const resultElement = document.getElementById('result');
             if (data.isProfitable === 'rise') {
                 resultElement.textContent = "The asset is likely to increase in price!";
             } else if (data.isProfitable === 'fall') {
