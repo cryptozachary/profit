@@ -29,6 +29,15 @@ app.post('/check-profitability', async (req, res) => {
         case 'formula3':  // Using Bollinger Bands
             endpoint = `https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
             break;
+        case 'formula4':  // Using Fibonacci retracement
+            endpoint = `https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            break;
+        case 'formula5':  // Using VOSC
+            endpoint = `https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`;
+            break;
+        case 'formula6':  // Using EMA Crossover
+            endpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=12`;
+            break;
     }
 
     try {
@@ -49,6 +58,12 @@ function determineProfitability(data, formula) {
             return macdFormula(data);
         case 'formula3':
             return bollingerBandsFormula(data);
+        case 'formula4':
+            return fibonacciRetracementFormula(data);
+        case 'formula5':
+            return voscFormula(data);
+        case 'formula6':
+            return emaCrossoverFormula(data);
         default:
             return 'neutral';
     }
@@ -78,6 +93,53 @@ function bollingerBandsFormula(data) {
     else if (price < lowerBand) return 'rise';
     else return 'neutral';
 }
+
+function fibonacciRetracementFormula(data) {
+    const retracementValue = data.value;
+    if (data.trend === "DOWNTREND") {
+        return retracementValue > 61.8 ? 'fall' : 'rise';
+    } else { // Assuming UPTREND if not DOWNTREND
+        return retracementValue < 38.2 ? 'rise' : 'fall';
+    }
+}
+
+function voscFormula(data) {
+    const voscValue = data.value;
+    if (voscValue > 0) {
+        return 'rise';
+    } else if (voscValue < 0) {
+        return 'fall';
+    } else {
+        return 'neutral';
+    }
+}
+async function emaCrossoverFormula(cryptoAsset) {
+    const shortPeriod = 12;
+    const longPeriod = 26;
+
+    const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=${shortPeriod}`;
+    const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=${longPeriod}`;
+
+    try {
+        const shortEmaResponse = await axios.get(shortEmaEndpoint);
+        const longEmaResponse = await axios.get(longEmaEndpoint);
+
+        const currentShortEma = shortEmaResponse.data[0].value;
+        const previousShortEma = shortEmaResponse.data[1].value;
+
+        const currentLongEma = longEmaResponse.data[0].value;
+        const previousLongEma = longEmaResponse.data[1].value;
+
+        if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return 'rise';
+        if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return 'fall';
+        return 'neutral';
+    } catch (error) {
+        console.error(error);
+        throw new Error('Failed to retrieve EMA data.');
+    }
+}
+
+
 
 
 const PORT = 3000;
