@@ -18,6 +18,16 @@ app.set('views', path.join(__dirname, 'views'));
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType } = req.body;
 
+    if (formulaType === 'formula6') { // EMA Crossover
+        try {
+            prediction = await emaCrossoverFormula(cryptoAsset);
+            return res.json({ isProfitable: prediction });
+        } catch (error) {
+            console.error(error);
+            return res.status(500).send('Failed to retrieve EMA data.');
+        }
+    }
+
     let endpoint = '';
     switch (formulaType) {
         case 'formula1':  // Using RSI
@@ -34,9 +44,6 @@ app.post('/check-profitability', async (req, res) => {
             break;
         case 'formula5':  // Using VOSC
             endpoint = `https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`;
-            break;
-        case 'formula6':  // Using EMA Crossover
-            endpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=12`;
             break;
     }
 
@@ -62,8 +69,6 @@ function determineProfitability(data, formula) {
             return fibonacciRetracementFormula(data);
         case 'formula5':
             return voscFormula(data);
-        case 'formula6':
-            return emaCrossoverFormula(data);
         default:
             return 'neutral';
     }
@@ -96,6 +101,9 @@ function bollingerBandsFormula(data) {
 
 function fibonacciRetracementFormula(data) {
     const retracementValue = data.value;
+    const currentTrend = data.trend;
+    console.log([retracementValue, currentTrend])
+
     if (data.trend === "DOWNTREND") {
         return retracementValue > 61.8 ? 'fall' : 'rise';
     } else { // Assuming UPTREND if not DOWNTREND
@@ -105,6 +113,7 @@ function fibonacciRetracementFormula(data) {
 
 function voscFormula(data) {
     const voscValue = data.value;
+    console.log([voscValue])
     if (voscValue > 0) {
         return 'rise';
     } else if (voscValue < 0) {
@@ -121,14 +130,18 @@ async function emaCrossoverFormula(cryptoAsset) {
     const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=${longPeriod}`;
 
     try {
-        const shortEmaResponse = await axios.get(shortEmaEndpoint);
-        const longEmaResponse = await axios.get(longEmaEndpoint);
+        const [shortEmaResponse, longEmaResponse] = await Promise.all([
+            axios.get(shortEmaEndpoint),
+            axios.get(longEmaEndpoint)
+        ]);
 
         const currentShortEma = shortEmaResponse.data[0].value;
         const previousShortEma = shortEmaResponse.data[1].value;
 
         const currentLongEma = longEmaResponse.data[0].value;
         const previousLongEma = longEmaResponse.data[1].value;
+
+        console.log([currentShortEma, currentLongEma, previousShortEma, previousLongEma])
 
         if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return 'rise';
         if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return 'fall';
