@@ -1,5 +1,6 @@
 // server.js
 // Load environment variables
+const path = require('path');
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
@@ -8,29 +9,35 @@ const app = express();
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static('public'));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static(path.join(__dirname, '../frontend/public')));
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
 
 app.post('/check-profitability', async (req, res) => {
+    const { cryptoAsset, formulaType } = req.body;
+
+    let endpoint = '';
+    switch (formulaType) {
+        case 'formula1':  // Using RSI
+            endpoint = `https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            break;
+        case 'formula2':  // Using MACD
+            endpoint = `https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            break;
+        case 'formula3':  // Using Bollinger Bands
+            endpoint = `https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            break;
+    }
+
     try {
-        const { asset, formula } = req.body;
-
-        let indicatorResponse = await axios.get('https://api.taapi.io/rsi', {
-            params: {
-                secret: TAAPI_SECRET,
-                exchange: "binance",
-                symbol: asset,
-                interval: "1h",
-            }
-        });
-
-        // Note: You will need to define the logic for determining profitability using the returned data and selected formula.
-        const isProfitable = determineProfitability(indicatorResponse.data, formula);
-
-        res.json({ isProfitable });
+        const response = await axios.get(endpoint);
+        const prediction = determineProfitability(response.data, formulaType);
+        res.json({ isProfitable: prediction });
     } catch (error) {
-        res.status(500).json({ error: "Failed to retrieve data." });
+        console.error(error);
+        res.status(500).send('Failed to retrieve indicator data.');
     }
 });
 
@@ -55,17 +62,18 @@ function rsiFormula(data) {
 }
 
 function macdFormula(data) {
-    const macdLine = data.macd;
-    const signalLine = data.signal;
+    const macdLine = data.valueMACD;
+    const signalLine = data.valueMACDSignal;
     if (macdLine > signalLine) return 'rise';
     else if (macdLine < signalLine) return 'fall';
     else return 'neutral';
 }
 
 function bollingerBandsFormula(data) {
-    const price = data.price;
-    const upperBand = data.upperBand;
-    const lowerBand = data.lowerBand;
+    // Assuming current price is middle band, though this may need to be fetched separately
+    const price = data.valueMiddleBand;
+    const upperBand = data.valueUpperBand;
+    const lowerBand = data.valueLowerBand;
     if (price > upperBand) return 'fall';
     else if (price < lowerBand) return 'rise';
     else return 'neutral';
@@ -75,4 +83,8 @@ function bollingerBandsFormula(data) {
 const PORT = 3000;
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
+});
+
+app.get('/', (req, res) => {
+    res.render('index');
 });

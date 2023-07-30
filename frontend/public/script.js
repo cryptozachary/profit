@@ -1,4 +1,6 @@
 document.getElementById('checkProfitability').addEventListener('click', async () => {
+    console.log('clicked')
+
     const asset = document.getElementById('asset').value;
     const formula = document.getElementById('formula').value;
 
