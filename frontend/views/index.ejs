@@ -4,25 +4,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Crypto Profitability Checker</title>
+    <title>Know your Strategies</title>
     <link rel="stylesheet" type="text/css" href="styles.css">
 </head>
 
 <body>
+    <header>
+        <h1>Know your Strategies</h1>
+    </header>
+
     <div class="container">
         <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)">
         <select id="formula">
+            <option value="all">All Strategies</option>
             <option value="formula1">RSI</option>
             <option value="formula2">MACD</option>
             <option value="formula3">Bollinger Bands</option>
             <option value="formula4">Fibonacci Retracement</option>
             <option value="formula5">Volume Oscillator (VOSC)</option>
             <option value="formula6">EMA</option>
-            <option value="all">Evaluate ALL Formulas</option>
         </select>
         <button id="checkProfitability">Profitable?</button>
         <p id="result"></p>
     </div>
+
+    <footer>
+        <p>&copy; 2023 Your Trading Application</p>
+    </footer>
 
     <script src="script.js"></script>
 </body>

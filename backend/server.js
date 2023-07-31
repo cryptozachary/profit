@@ -9,14 +9,28 @@ const app = express();
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
+//global variables
+const GLOBAL_VARABLES = {
+    assetPrice: null
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../frontend/public')));
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+app.set('views', path.join(__dirname, '../frontend/views'));
+
+
 
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType } = req.body;
+
+    // working on return asset price of bollingerbands....
+    let thePrice = async function returnPrice() {
+        GLOBAL_VARABLES.assetPrice = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1m`)
+        console.log(GLOBAL_VARABLES.assetPrice)
+        return GLOBAL_VARABLES.assetPrice
+    }
 
     if (formulaType === 'formula6') { // EMA Crossover
         try {
@@ -115,26 +129,34 @@ function determineProfitability(data, formula) {
 
 function rsiFormula(data) {
     const rsiValue = data.value;
+    console.log([rsiValue])
     if (rsiValue > 70) return { direction: 'fall', value: 1 };
     else if (rsiValue < 30) return { direction: 'rise', value: 0 };
     else return { direction: 'neutral', value: '00' };
+
 }
 
 function macdFormula(data) {
     const macdLine = data.valueMACD;
     const signalLine = data.valueMACDSignal;
+    console.log([macdLine, signalLine])
     if (macdLine > signalLine) return { direction: 'rise', value: 0 };
     else if (macdLine < signalLine) return { direction: 'fall', value: 1 };
     else return { direction: 'neutral', value: '00' };
 }
 
 function bollingerBandsFormula(data) {
-    // Assuming current price is middle band, though this may need to be fetched separately
-    const price = data.valueMiddleBand;
+    const currentPrice = returnPrice()
     const upperBand = data.valueUpperBand;
     const lowerBand = data.valueLowerBand;
-    if (price > upperBand) return { direction: 'fall', value: 1 };
-    else if (price < lowerBand) return { direction: 'rise', value: 0 };
+    const middleBand = data.valueMiddleBand;
+
+    console.log([currentPrice, upperBand, lowerBand, middleBand]);
+
+    if (currentPrice > upperBand) return { direction: 'overbought', value: 1 };
+    else if (currentPrice < lowerBand) return { direction: 'oversold', value: 0 };
+    else if (currentPrice > middleBand) return { direction: 'above_average', value: '01' };
+    else if (currentPrice < middleBand) return { direction: 'below_average', value: '10' };
     else return { direction: 'neutral', value: '00' };
 }
 
@@ -204,8 +226,8 @@ function evaluateAssetDirection(predictions) {
 
     console.log([riseCount, fallCount, neutralCount])
 
-    if (riseCount > fallCount && riseCount > neutralCount) return "likely to rise";
-    if (fallCount > riseCount && fallCount > neutralCount) return "likely to fall";
+    if (riseCount > fallCount && riseCount > neutralCount) return "rise";
+    if (fallCount > riseCount && fallCount > neutralCount) return "fall";
     return "neutral"; // Default to 'neutral' if unable to determine
 }
 

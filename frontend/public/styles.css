@@ -1,15 +1,38 @@
 body {
     font-family: Arial, sans-serif;
     display: flex;
-    justify-content: center;
+    flex-direction: column;
+    justify-content: space-between;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
+    margin: 0;
     background-color: #f4f4f4;
 }
 
+header {
+    background-color: #1e3c72;
+    color: white;
+    padding: 15px 0;
+    text-align: center;
+    width: 100vw;
+}
+
+footer {
+    background-color: #1e3c72;
+    color: white;
+    padding: 10px 0;
+    text-align: center;
+    width: 100vw;
+}
+
 .container {
+    display: flex;
+    flex-direction: column;
+    min-width: 350px;
+    gap: 25px;
     background: white;
     padding: 20px;
+    margin: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
@@ -17,4 +40,29 @@ body {
 button {
     display: block;
     margin-top: 20px;
+    background-color: #1e3c72;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#result {
+    height: 20px;
+}
+
+#checkProfitability {
+    display: flex;
+    justify-content: center;
+}
+
+input[type="text"] {
+    text-transform: uppercase;
+}
+
+@media only screen and (max-width: 600px) {
+    .container {
+        margin: 10px;
+    }
 }
