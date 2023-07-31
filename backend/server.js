@@ -36,7 +36,7 @@ app.post('/check-profitability', async (req, res) => {
                 axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
                 axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
                 axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`),
-                emaCrossoverFormula(cryptoAsset)
+                //emaCrossoverFormula(cryptoAsset)
             ]);
 
             const predictions = results.map((response, index) => {
@@ -51,8 +51,8 @@ app.post('/check-profitability', async (req, res) => {
                         return fibonacciRetracementFormula(response.data);
                     case 4:
                         return voscFormula(response.data);
-                    case 5:
-                        return response;  // EMA result is already a prediction
+                    // case 5:
+                    //     return response;  // EMA result is already a prediction
                     default:
                         return { direction: 'neutral', value: '00' };
                 }
