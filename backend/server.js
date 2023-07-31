@@ -20,11 +20,50 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'formula6') { // EMA Crossover
         try {
-            prediction = await emaCrossoverFormula(cryptoAsset);
-            return res.json({ isProfitable: prediction });
+            const prediction = await emaCrossoverFormula(cryptoAsset);
+            return res.json({ isProfitable: prediction.direction });
         } catch (error) {
             console.error(error);
             return res.status(500).send('Failed to retrieve EMA data.');
+        }
+    }
+
+    if (formulaType === 'all') {  // Check for all formulas
+        try {
+            const results = await Promise.all([
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
+                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
+                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`),
+                emaCrossoverFormula(cryptoAsset)
+            ]);
+
+            const predictions = results.map((response, index) => {
+                switch (index) {
+                    case 0:
+                        return rsiFormula(response.data);
+                    case 1:
+                        return macdFormula(response.data);
+                    case 2:
+                        return bollingerBandsFormula(response.data);
+                    case 3:
+                        return fibonacciRetracementFormula(response.data);
+                    case 4:
+                        return voscFormula(response.data);
+                    case 5:
+                        return response;  // EMA result is already a prediction
+                    default:
+                        return { direction: 'neutral', value: '00' };
+                }
+            });
+
+            const overallPrediction = evaluateAssetDirection(predictions);
+            return res.json({ isProfitable: overallPrediction });
+
+        } catch (error) {
+            console.error(error);
+            return res.status(500).send('Failed to retrieve indicator data.');
         }
     }
 
@@ -50,7 +89,7 @@ app.post('/check-profitability', async (req, res) => {
     try {
         const response = await axios.get(endpoint);
         const prediction = determineProfitability(response.data, formulaType);
-        res.json({ isProfitable: prediction });
+        res.json({ isProfitable: prediction.direction });
     } catch (error) {
         console.error(error);
         res.status(500).send('Failed to retrieve indicator data.');
@@ -76,17 +115,17 @@ function determineProfitability(data, formula) {
 
 function rsiFormula(data) {
     const rsiValue = data.value;
-    if (rsiValue > 70) return 'fall';
-    else if (rsiValue < 30) return 'rise';
-    else return 'neutral';
+    if (rsiValue > 70) return { direction: 'fall', value: 1 };
+    else if (rsiValue < 30) return { direction: 'rise', value: 0 };
+    else return { direction: 'neutral', value: '00' };
 }
 
 function macdFormula(data) {
     const macdLine = data.valueMACD;
     const signalLine = data.valueMACDSignal;
-    if (macdLine > signalLine) return 'rise';
-    else if (macdLine < signalLine) return 'fall';
-    else return 'neutral';
+    if (macdLine > signalLine) return { direction: 'rise', value: 0 };
+    else if (macdLine < signalLine) return { direction: 'fall', value: 1 };
+    else return { direction: 'neutral', value: '00' };
 }
 
 function bollingerBandsFormula(data) {
@@ -94,9 +133,9 @@ function bollingerBandsFormula(data) {
     const price = data.valueMiddleBand;
     const upperBand = data.valueUpperBand;
     const lowerBand = data.valueLowerBand;
-    if (price > upperBand) return 'fall';
-    else if (price < lowerBand) return 'rise';
-    else return 'neutral';
+    if (price > upperBand) return { direction: 'fall', value: 1 };
+    else if (price < lowerBand) return { direction: 'rise', value: 0 };
+    else return { direction: 'neutral', value: '00' };
 }
 
 function fibonacciRetracementFormula(data) {
@@ -105,9 +144,9 @@ function fibonacciRetracementFormula(data) {
     console.log([retracementValue, currentTrend])
 
     if (data.trend === "DOWNTREND") {
-        return retracementValue > 61.8 ? 'fall' : 'rise';
+        return retracementValue > 61.8 ? { direction: 'fall', value: 1 } : { direction: 'rise', value: 0 };
     } else { // Assuming UPTREND if not DOWNTREND
-        return retracementValue < 38.2 ? 'rise' : 'fall';
+        return retracementValue < 38.2 ? { direction: 'rise', value: 0 } : { direction: 'fall', value: 1 };
     }
 }
 
@@ -115,11 +154,11 @@ function voscFormula(data) {
     const voscValue = data.value;
     console.log([voscValue])
     if (voscValue > 0) {
-        return 'rise';
+        return { direction: 'rise', value: 0 };
     } else if (voscValue < 0) {
-        return 'fall';
+        return { direction: 'fall', value: 1 };
     } else {
-        return 'neutral';
+        return { direction: 'neutral', value: '00' };
     }
 }
 async function emaCrossoverFormula(cryptoAsset) {
@@ -143,15 +182,32 @@ async function emaCrossoverFormula(cryptoAsset) {
 
         console.log([currentShortEma, currentLongEma, previousShortEma, previousLongEma])
 
-        if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return 'rise';
-        if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return 'fall';
-        return 'neutral';
+        if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return { direction: 'rise', value: 0 };
+        if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return { direction: 'fall', value: 1 };
+        return { direction: 'neutral', value: '00' };
     } catch (error) {
         console.error(error);
         throw new Error('Failed to retrieve EMA data.');
     }
 }
 
+function evaluateAssetDirection(predictions) {
+    let riseCount = 0;
+    let fallCount = 0;
+    let neutralCount = 0;
+
+    for (let prediction of predictions) {
+        if (prediction.value === 0) riseCount++;
+        else if (prediction.value === 1) fallCount++;
+        else neutralCount++; // prediction.value === '00'
+    }
+
+    console.log([riseCount, fallCount, neutralCount])
+
+    if (riseCount > fallCount && riseCount > neutralCount) return "likely to rise";
+    if (fallCount > riseCount && fallCount > neutralCount) return "likely to fall";
+    return "neutral"; // Default to 'neutral' if unable to determine
+}
 
 
 
