@@ -10,8 +10,8 @@ const app = express();
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
 //global variables
-const GLOBAL_VARABLES = {
-    assetPrice: null
+const GLOBAL_VARIABLES = {
+    assetPrice: ""
 }
 
 app.use(express.json());
@@ -20,17 +20,19 @@ app.use(express.static(path.join(__dirname, '../frontend/public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../frontend/views'));
 
-
-
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType } = req.body;
 
-    // working on return asset price of bollingerbands....
-    let thePrice = async function returnPrice() {
-        GLOBAL_VARABLES.assetPrice = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1m`)
-        console.log(GLOBAL_VARABLES.assetPrice)
-        return GLOBAL_VARABLES.assetPrice
+    // grab asset price
+    try {
+        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1m`)
+        console.log(`Asset Price: ${response.data.value}`)
+        GLOBAL_VARIABLES.assetPrice = response.data.value
+    } catch {
+        console.error(error);
+        return res.status(500).send('Failed to retrieve Asset Price.');
     }
+
 
     if (formulaType === 'formula6') { // EMA Crossover
         try {
@@ -50,7 +52,7 @@ app.post('/check-profitability', async (req, res) => {
                 axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
                 axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
                 axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`),
-                //emaCrossoverFormula(cryptoAsset)
+                emaCrossoverFormula(cryptoAsset)
             ]);
 
             const predictions = results.map((response, index) => {
@@ -65,8 +67,8 @@ app.post('/check-profitability', async (req, res) => {
                         return fibonacciRetracementFormula(response.data);
                     case 4:
                         return voscFormula(response.data);
-                    // case 5:
-                    //     return response;  // EMA result is already a prediction
+                    case 5:
+                        return response;  // EMA result is already a prediction
                     default:
                         return { direction: 'neutral', value: '00' };
                 }
@@ -146,17 +148,13 @@ function macdFormula(data) {
 }
 
 function bollingerBandsFormula(data) {
-    const currentPrice = returnPrice()
+    // Assuming current price is middle band, though this may need to be fetched separately
+    const price = GLOBAL_VARIABLES.assetPrice;
     const upperBand = data.valueUpperBand;
     const lowerBand = data.valueLowerBand;
-    const middleBand = data.valueMiddleBand;
-
-    console.log([currentPrice, upperBand, lowerBand, middleBand]);
-
-    if (currentPrice > upperBand) return { direction: 'overbought', value: 1 };
-    else if (currentPrice < lowerBand) return { direction: 'oversold', value: 0 };
-    else if (currentPrice > middleBand) return { direction: 'above_average', value: '01' };
-    else if (currentPrice < middleBand) return { direction: 'below_average', value: '10' };
+    console.log([price, upperBand, lowerBand])
+    if (price > upperBand) return { direction: 'fall', value: 1 };
+    else if (price < lowerBand) return { direction: 'rise', value: 0 };
     else return { direction: 'neutral', value: '00' };
 }
 
