@@ -44,6 +44,23 @@ app.post('/check-profitability', async (req, res) => {
         }
     }
 
+    if (formulaType === 'formula7') { // Bear Flag Pattern
+        try {
+            const bearFlagPattern = await getBearFlagSignal(
+                TAAPI_SECRET,
+                'binance',
+                `${cryptoAsset}/USDT`,
+                '1h',
+                14
+            );
+            return res.json({ isProfitable: bearFlagPattern });
+        } catch (error) {
+            console.error(error);
+            return res.status(500).send('Failed to retrieve bear flag pattern data.');
+        }
+    }
+
+
     if (formulaType === 'all') {  // Check for all formulas
         try {
             const results = await Promise.all([
@@ -126,6 +143,44 @@ function determineProfitability(data, formula) {
             return voscFormula(data);
         default:
             return 'neutral';
+    }
+}
+
+async function getBearFlagSignal(api_secret, exchange, symbol, interval, period = 14) {
+    const url = `https://api.taapi.io/candles?secret=${api_secret}&exchange=${exchange}&symbol=${symbol}&interval=${interval}&period=${period}`;
+    try {
+        const response = await axios.get(url);
+        const data = response.data;
+
+        if (!data) {
+            return false; // No data or invalid response
+        }
+
+        // Check for bear flag pattern
+        for (let i = 1; i < data.length; i++) {
+            // Check for downtrend (flagpole)
+            if (data[i].close < data[i - 1].close) {
+                const flagpoleHigh = data[i - 1].high;
+                const flagpoleLow = data[i].low;
+
+                // Check for consolidation (flag)
+                let validFlag = true;
+                for (let j = i + 1; j < data.length; j++) {
+                    if (data[j].high > flagpoleHigh || data[j].low < flagpoleLow) {
+                        validFlag = false;
+                        break;
+                    }
+                }
+                if (validFlag) {
+                    return true; // Bear flag pattern found
+                }
+            }
+        }
+
+        return false; // No bear flag pattern found
+    } catch (error) {
+        console.error(error);
+        throw new Error('Failed to retrieve candle data.');
     }
 }
 
@@ -232,8 +287,10 @@ function evaluateAssetDirection(predictions) {
 
 
 const PORT = 3000;
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
+const IP = '192.168.1.82'
+
+app.listen(PORT, IP, () => {
+    console.log(`Server is running on http://${IP}:${PORT}`);
 });
 
 app.get('/', (req, res) => {
