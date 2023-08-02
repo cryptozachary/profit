@@ -3,7 +3,6 @@
 const path = require('path');
 require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
 const axios = require('axios');
 const app = express();
 
@@ -53,7 +52,11 @@ app.post('/check-profitability', async (req, res) => {
                 '1h',
                 14
             );
-            return res.json({ isProfitable: bearFlagPattern });
+            return res.json({
+                isProfitable: bearFlagPattern.patternFound,
+                bearFlagPrice: bearFlagPattern.targetPrice,
+                bearFlagHeight: bearFlagPattern.flagpoleHeight
+            });
         } catch (error) {
             console.error(error);
             return res.status(500).send('Failed to retrieve bear flag pattern data.');
@@ -153,35 +156,70 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
         const data = response.data;
 
         if (!data) {
-            return false; // No data or invalid response
+            return { patternFound: false }; // No data or invalid response
         }
 
         // Check for bear flag pattern
+        const minFlagDuration = 5;
+        const flagpoleThreshold = 0.02; // 2% threshold for flagpole boundary
+        const flagThreshold = 0.01; // 1% threshold for flag boundary
+        let flagpoleHigh = 0;
+        let flagpoleLow = 0;
+        let flagDuration = 0;
+        let volumeDuringFlag = 0;
+        let slopeCheck = true;
+
         for (let i = 1; i < data.length; i++) {
             // Check for downtrend (flagpole)
             if (data[i].close < data[i - 1].close) {
-                const flagpoleHigh = data[i - 1].high;
-                const flagpoleLow = data[i].low;
+                if (flagpoleHigh === 0) {
+                    flagpoleHigh = data[i - 1].high;
+                    flagpoleLow = data[i].low;
+                    flagDuration = 1;
+                    volumeDuringFlag = data[i].volume;
+                } else {
+                    // Check for volume decrease during flag
+                    volumeDuringFlag += data[i].volume;
+                    flagDuration++;
 
-                // Check for consolidation (flag)
-                let validFlag = true;
-                for (let j = i + 1; j < data.length; j++) {
-                    if (data[j].high > flagpoleHigh || data[j].low < flagpoleLow) {
-                        validFlag = false;
-                        break;
+                    if (flagDuration >= minFlagDuration) {
+                        const avgVolumeFlagpole = volumeDuringFlag / flagDuration;
+                        if (data[i].volume < avgVolumeFlagpole) {
+                            slopeCheck = slopeCheck && (data[i].close < data[i - 1].close);
+
+                            // Check for flag boundaries
+                            const flagHighBoundary = flagpoleHigh * (1 - flagpoleThreshold);
+                            const flagLowBoundary = flagpoleLow * (1 + flagpoleThreshold);
+                            if (data[i].high > flagHighBoundary || data[i].low < flagLowBoundary) {
+                                slopeCheck = false;
+                                break;
+                            }
+                        } else {
+                            slopeCheck = false;
+                            break;
+                        }
                     }
-                }
-                if (validFlag) {
-                    return true; // Bear flag pattern found
                 }
             }
         }
 
-        return false; // No bear flag pattern found
+        if (slopeCheck) {
+            const flagpoleHeight = flagpoleHigh - flagpoleLow;
+            const targetPrice = data[data.length - 1].low - flagpoleHeight; // Projecting downwards from the breakout point
+
+            return {
+                patternFound: true,
+                targetPrice: targetPrice,
+                flagpoleHeight: flagpoleHeight,
+            };
+        }
+
+        return { patternFound: false }; // No bear flag pattern found
     } catch (error) {
         console.error(error);
         throw new Error('Failed to retrieve candle data.');
     }
+
 }
 
 function rsiFormula(data) {

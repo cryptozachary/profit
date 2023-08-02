@@ -21,13 +21,35 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
         if (response.ok) {
             const data = await response.json();
-            if (data.isProfitable === 'rise') {
+            const prediction = data.isProfitable;
+
+            console.log(prediction)
+
+            if (prediction === 'rise') {
                 resultElement.textContent = "The asset is likely to increase in price!";
-            } else if (data.isProfitable === 'fall') {
+            }
+
+            if (prediction === 'fall') {
                 resultElement.textContent = "The asset is likely to decrease in price!";
-            } else {
+            }
+
+            if (prediction === false) {
+                resultElement.textContent = "Bear Flag does not exist"
+            }
+
+            if (prediction === 'neutral') {
                 resultElement.textContent = "The asset's price movement is uncertain.";
             }
+
+
+            if (prediction === true) {
+                resultElement.textContent = `Bearflag pattern exist with price target of ${data.bearFlagPrice} and flag pole height of ${data.bearFlagHeight}`
+            }
+
+            // if (!prediction || (prediction !== 'rise' && prediction !== 'fall')) {
+            //     resultElement.textContent = "The asset's price movement is uncertain.";
+            // }
+
         } else {
             console.error('Server returned an error:', await response.text());
         }
