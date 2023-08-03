@@ -35,8 +35,8 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'formula6') { // EMA Crossover
         try {
-            const prediction = await emaCrossoverFormula(cryptoAsset);
-            return res.json({ isProfitable: prediction.direction });
+            const prediction = await emaCrossoverFormula(cryptoAsset); // retrieving prediction from formula 
+            return res.json({ isProfitable: prediction.direction }); // passing prediction back to javascript client
         } catch (error) {
             console.error(error);
             return res.status(500).send('Failed to retrieve EMA data.');

@@ -23,7 +23,7 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
             const data = await response.json();
             const prediction = data.isProfitable;
 
-            console.log(prediction)
+            console.log(data)
 
             if (prediction === 'rise') {
                 resultElement.textContent = "The asset is likely to increase in price!";
