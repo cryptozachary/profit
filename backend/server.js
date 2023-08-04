@@ -20,14 +20,14 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../frontend/views'));
 
 app.post('/check-profitability', async (req, res) => {
-    const { cryptoAsset, formulaType } = req.body;
+    const { cryptoAsset, formulaType, interval = '1h', period = 14 } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
-    // grab asset price
+    // Grab asset price
     try {
         let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1m`)
         console.log(`Asset Price: ${response.data.value}`)
-        GLOBAL_VARIABLES.assetPrice = response.data.value
-    } catch {
+        GLOBAL_VARIABLES.assetPrice = response.data.value;
+    } catch (error) {
         console.error(error);
         return res.status(500).send('Failed to retrieve Asset Price.');
     }
@@ -49,8 +49,8 @@ app.post('/check-profitability', async (req, res) => {
                 TAAPI_SECRET,
                 'binance',
                 `${cryptoAsset}/USDT`,
-                '1h',
-                14
+                `${interval}`,
+                `${period}`
             );
             return res.json({
                 isProfitable: bearFlagPattern.patternFound,
@@ -102,23 +102,25 @@ app.post('/check-profitability', async (req, res) => {
             return res.status(500).send('Failed to retrieve indicator data.');
         }
     }
-
     let endpoint = '';
+    const baseEndpoint = `https://api.taapi.io/`;
+    const commonParams = `secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}`;
+
     switch (formulaType) {
         case 'formula1':  // Using RSI
-            endpoint = `https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            endpoint = `${baseEndpoint}rsi?${commonParams}`;
             break;
         case 'formula2':  // Using MACD
-            endpoint = `https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            endpoint = `${baseEndpoint}macd?${commonParams}`;
             break;
         case 'formula3':  // Using Bollinger Bands
-            endpoint = `https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            endpoint = `${baseEndpoint}bbands?${commonParams}`;
             break;
         case 'formula4':  // Using Fibonacci retracement
-            endpoint = `https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`;
+            endpoint = `${baseEndpoint}fibonacciretracement?${commonParams}`;
             break;
         case 'formula5':  // Using VOSC
-            endpoint = `https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`;
+            endpoint = `${baseEndpoint}vosc?${commonParams}&short_period=10&long_period=50`;
             break;
     }
 
@@ -321,8 +323,6 @@ function evaluateAssetDirection(predictions) {
     if (fallCount > riseCount && fallCount > neutralCount) return "fall";
     return "neutral"; // Default to 'neutral' if unable to determine
 }
-
-
 
 const PORT = 3000;
 const IP = '192.168.1.82'
