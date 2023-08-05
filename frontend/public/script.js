@@ -17,7 +17,7 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
         let requestBody = { cryptoAsset: asset, formulaType: formula };
 
-        if (formulasRequiringParams.includes(formula) && !intervalElement.disabled && !periodElement.disabled) {
+        if (!intervalElement.disabled && !periodElement.disabled) {
             requestBody.interval = intervalElement.value;
             requestBody.period = periodElement.value;
             console.log(`Interval: ${intervalElement.value}, Period: ${periodElement.value}`);
