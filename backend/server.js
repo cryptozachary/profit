@@ -10,7 +10,14 @@ const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
 //global variables
 const GLOBAL_VARIABLES = {
-    assetPrice: ""
+    assetPrice: "",
+    rsiValue: "",
+    volumeValue: "",
+    bollValue: "",
+    fibonValue: "",
+    MacdValue: "",
+    emaValue: "",
+    name: "",
 }
 
 app.use(express.json());
@@ -27,6 +34,7 @@ app.post('/check-profitability', async (req, res) => {
         let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1m`)
         console.log(`Asset Price: ${response.data.value}`)
         GLOBAL_VARIABLES.assetPrice = response.data.value;
+        GLOBAL_VARIABLES.name = cryptoAsset
     } catch (error) {
         console.error(error);
         return res.status(500).send('Failed to retrieve Asset Price.');
@@ -36,7 +44,7 @@ app.post('/check-profitability', async (req, res) => {
     if (formulaType === 'formula6') { // EMA Crossover
         try {
             const prediction = await emaCrossoverFormula(cryptoAsset); // retrieving prediction from formula 
-            return res.json({ isProfitable: prediction.direction }); // passing prediction back to javascript client
+            return res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]); // passing prediction back to javascript client
         } catch (error) {
             console.error(error);
             return res.status(500).send('Failed to retrieve EMA data.');
@@ -52,11 +60,11 @@ app.post('/check-profitability', async (req, res) => {
                 `${interval}`,
                 `${period}`
             );
-            return res.json({
+            return res.json([{
                 isProfitable: bearFlagPattern.patternFound,
                 bearFlagPrice: bearFlagPattern.targetPrice,
-                bearFlagHeight: bearFlagPattern.flagpoleHeight
-            });
+                bearFlagHeight: bearFlagPattern.flagpoleHeight,
+            }, GLOBAL_VARIABLES]);
         } catch (error) {
             console.error(error);
             return res.status(500).send('Failed to retrieve bear flag pattern data.');
@@ -95,7 +103,7 @@ app.post('/check-profitability', async (req, res) => {
             });
 
             const overallPrediction = evaluateAssetDirection(predictions);
-            return res.json({ isProfitable: overallPrediction });
+            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES]);
 
         } catch (error) {
             console.error(error);
@@ -127,7 +135,7 @@ app.post('/check-profitability', async (req, res) => {
     try {
         const response = await axios.get(endpoint);
         const prediction = determineProfitability(response.data, formulaType);
-        res.json({ isProfitable: prediction.direction });
+        res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]);
     } catch (error) {
         console.error(error);
         res.status(500).send('Failed to retrieve indicator data.');
@@ -226,6 +234,7 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
 
 function rsiFormula(data) {
     const rsiValue = data.value;
+    GLOBAL_VARIABLES.rsiValue = rsiValue
     console.log([rsiValue])
     if (rsiValue > 70) return { direction: 'fall', value: 1 };
     else if (rsiValue < 30) return { direction: 'rise', value: 0 };
@@ -236,6 +245,7 @@ function rsiFormula(data) {
 function macdFormula(data) {
     const macdLine = data.valueMACD;
     const signalLine = data.valueMACDSignal;
+    GLOBAL_VARIABLES.MacdValue = `MaccdLine: ${macdLine} SignalLine: ${signalLine}`
     console.log([macdLine, signalLine])
     if (macdLine > signalLine) return { direction: 'rise', value: 0 };
     else if (macdLine < signalLine) return { direction: 'fall', value: 1 };
@@ -247,6 +257,7 @@ function bollingerBandsFormula(data) {
     const price = GLOBAL_VARIABLES.assetPrice;
     const upperBand = data.valueUpperBand;
     const lowerBand = data.valueLowerBand;
+    GLOBAL_VARIABLES.bollValue = `Upper: ${upperBand} Lower: ${lowerBand}`
     console.log([price, upperBand, lowerBand])
     if (price > upperBand) return { direction: 'fall', value: 1 };
     else if (price < lowerBand) return { direction: 'rise', value: 0 };
@@ -256,6 +267,7 @@ function bollingerBandsFormula(data) {
 function fibonacciRetracementFormula(data) {
     const retracementValue = data.value;
     const currentTrend = data.trend;
+    GLOBAL_VARIABLES.fibonValue = `Retrace: ${retracementValue} Trend: ${currentTrend}`
     console.log([retracementValue, currentTrend])
 
     if (data.trend === "DOWNTREND") {
@@ -267,6 +279,7 @@ function fibonacciRetracementFormula(data) {
 
 function voscFormula(data) {
     const voscValue = data.value;
+    GLOBAL_VARIABLES.volumeValue = voscValue
     console.log([voscValue])
     if (voscValue > 0) {
         return { direction: 'rise', value: 0 };
@@ -276,6 +289,7 @@ function voscFormula(data) {
         return { direction: 'neutral', value: '00' };
     }
 }
+
 async function emaCrossoverFormula(cryptoAsset) {
     const shortPeriod = 12;
     const longPeriod = 26;
@@ -295,6 +309,14 @@ async function emaCrossoverFormula(cryptoAsset) {
         const currentLongEma = longEmaResponse.data[0].value;
         const previousLongEma = longEmaResponse.data[1].value;
 
+        // round to nearest integer
+        const roundedCurrentShortEma = Math.round(currentShortEma);
+        const roundedCurrentLongEma = Math.round(currentLongEma);
+        const roundedPreviousShortEma = Math.round(previousShortEma);
+        const roundedPreviousLongEma = Math.round(previousLongEma);
+
+        // Update the GLOBAL_VARIABLES.emaValue with the rounded values
+        GLOBAL_VARIABLES.emaValue = `CShort: ${roundedCurrentShortEma} CLong: ${roundedCurrentLongEma} PShort: ${roundedPreviousShortEma} Plong: ${roundedPreviousLongEma}`;
         console.log([currentShortEma, currentLongEma, previousShortEma, previousLongEma])
 
         if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return { direction: 'rise', value: 0 };
@@ -317,7 +339,7 @@ function evaluateAssetDirection(predictions) {
         else neutralCount++; // prediction.value === '00'
     }
 
-    console.log([riseCount, fallCount, neutralCount])
+    console.log(['Rise:', riseCount, 'Fall:', fallCount, 'Neutral:', neutralCount])
 
     if (riseCount > fallCount && riseCount > neutralCount) return "rise";
     if (fallCount > riseCount && fallCount > neutralCount) return "fall";

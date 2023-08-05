@@ -6,6 +6,15 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
     const resultElement = document.getElementById('result');
     const intervalElement = document.getElementById('interval');
     const periodElement = document.getElementById('period');
+    const assetNameDisplay = document.getElementById('assetName');
+    const assetPriceDisplay = document.getElementById('assetPriceDisplay');
+    const rsiValueDisplay = document.getElementById('rsiValue');
+    const volumeValueDisplay = document.getElementById('volumeValue');
+    const fibonacciValueDisplay = document.getElementById('fibonacciValue');
+    const emaValueDisplay = document.getElementById('emaValue');
+    const bollingerValueDisplay = document.getElementById('bollingerValue');
+    const macdValueDisplay = document.getElementById('macdValue');
+
 
     try {
         if (asset === "") {
@@ -34,9 +43,18 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
         if (response.ok) {
             const data = await response.json();
-            const prediction = data.isProfitable;
+            const prediction = data[0].isProfitable;
 
             console.log(data)
+
+            assetPriceDisplay.textContent = data[1].assetPrice;
+            rsiValueDisplay.textContent = data[1].rsiValue;
+            assetNameDisplay.textContent = data[1].name.toUpperCase()
+            volumeValueDisplay.textContent = data[1].volumeValue
+            fibonacciValueDisplay.textContent = data[1].fibonValue
+            emaValueDisplay.textContent = data[1].emaValue
+            bollingerValueDisplay.textContent = data[1].bollValue
+            macdValueDisplay.textContent = data[1].MacdValue
 
             if (prediction === 'rise') {
                 resultElement.textContent = "The asset is likely to increase in price!";
