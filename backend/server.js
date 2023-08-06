@@ -36,7 +36,8 @@ app.set('views', path.join(__dirname, '../frontend/views'));
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14 } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
-    clearObject(GLOBAL_VARIABLES)
+
+    formulaType !== "formula7" ? clearObject(GLOBAL_VARIABLES) : null;
 
     // Grab asset price
     try {
