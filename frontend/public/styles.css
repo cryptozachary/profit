@@ -33,7 +33,7 @@ footer {
 .container {
     display: flex;
     flex-direction: column;
-    min-width: 350px;
+    width: 350px;
     gap: 25px;
     background: white;
     padding: 20px;
@@ -81,5 +81,15 @@ input[type="text"] {
     padding: 10px;
     border-radius: 5px;
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
-    min-width: 600px;
+    min-width: 50vw;
+}
+
+/* Media Query for screens with a maximum width of 600px */
+@media (max-width: 768x) {
+
+    header,
+    footer {
+        min-width: 600px;
+    }
+
 }

@@ -24,10 +24,12 @@
             <p><strong>Bollinger Bands:</strong> <span id="bollingerValue"></span></p>
             <p><strong>MACD:</strong> <span id="macdValue"></span></p>
         </div>
-
+    </div>
+    <div>
+        <p id="result"></p>
     </div>
     <div class="container">
-        <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)">
+        <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)" value="btc">
         <select id="formula">
             <option value="all">All Strategies</option>
             <option value="formula1">RSI</option>
@@ -51,14 +53,12 @@
                 <option value="1d">1d</option>
                 <option value="1w">1 week</option>
             </select>
-
             <input class="params" id="period" type="numer" min="1" max="100" value="14"
                 placeholder="Period (default: 14)" disabled>
             <input id="checkbox" type="checkbox" name="myCheckbox" value="checkboxValue">
         </div>
 
         <button id="checkProfitability">Profitable?</button>
-        <p id="result"></p>
     </div>
 
     <footer>

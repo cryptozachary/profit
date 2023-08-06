@@ -47,9 +47,9 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
             console.log(data)
 
+            assetNameDisplay.textContent = data[1].name.toUpperCase()
             assetPriceDisplay.textContent = data[1].assetPrice;
             rsiValueDisplay.textContent = data[1].rsiValue;
-            assetNameDisplay.textContent = data[1].name.toUpperCase()
             volumeValueDisplay.textContent = data[1].volumeValue
             fibonacciValueDisplay.textContent = data[1].fibonValue
             emaValueDisplay.textContent = data[1].emaValue
@@ -73,7 +73,7 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
             }
 
             if (prediction === true) {
-                resultElement.textContent = `Bearflag pattern exist with price target of ${data.bearFlagPrice} and flag pole height of ${data.bearFlagHeight}`
+                resultElement.textContent = `Bearflag pattern exist with price target of ${data[0].bearFlagPrice} and flag pole height of ${data[0].bearFlagHeight}`
             }
 
             // if (!prediction || (prediction !== 'rise' && prediction !== 'fall')) {

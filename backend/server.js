@@ -8,7 +8,7 @@ const app = express();
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
-//global variables
+//global variables for the asset being displayed
 const GLOBAL_VARIABLES = {
     assetPrice: "",
     rsiValue: "",
@@ -20,6 +20,13 @@ const GLOBAL_VARIABLES = {
     name: "",
 }
 
+function clearObject(obj) {
+    Object.keys(obj).forEach((key) => {
+        obj[key] = '';
+    });
+}
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../frontend/public')));
@@ -28,6 +35,8 @@ app.set('views', path.join(__dirname, '../frontend/views'));
 
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14 } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
+
+    clearObject(GLOBAL_VARIABLES)
 
     // Grab asset price
     try {
@@ -43,11 +52,11 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'formula6') { // EMA Crossover
         try {
-            const prediction = await emaCrossoverFormula(cryptoAsset); // retrieving prediction from formula 
+            const prediction = await emaCrossoverFormula(cryptoAsset, interval, period); // retrieving prediction from formula 
             return res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]); // passing prediction back to javascript client
         } catch (error) {
             console.error(error);
-            return res.status(500).send('Failed to retrieve EMA data.');
+            return res.status(500).send('Failed to retrieve EMA data (server).');
         }
     }
 
@@ -80,7 +89,7 @@ app.post('/check-profitability', async (req, res) => {
                 axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
                 axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
                 axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`),
-                emaCrossoverFormula(cryptoAsset)
+                emaCrossoverFormula(cryptoAsset, interval, period)
             ]);
 
             const predictions = results.map((response, index) => {
@@ -188,6 +197,10 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
                     flagDuration = 1;
                     volumeDuringFlag = data[i].volume;
                 } else {
+                    // Update flagpoleHigh and flagpoleLow if a new high or low is detected
+                    flagpoleHigh = Math.max(flagpoleHigh, data[i - 1].high);
+                    flagpoleLow = Math.min(flagpoleLow, data[i].low);
+
                     // Check for volume decrease during flag
                     volumeDuringFlag += data[i].volume;
                     flagDuration++;
@@ -213,9 +226,16 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
             }
         }
 
+        // Check for breakout below the flag's low boundary
+        const lastCandle = data[data.length - 1];
+        const flagLowBoundary = flagpoleLow * (1 + flagpoleThreshold);
+        if (lastCandle.close > flagLowBoundary) {
+            return { patternFound: false };
+        }
+
         if (slopeCheck) {
             const flagpoleHeight = flagpoleHigh - flagpoleLow;
-            const targetPrice = data[data.length - 1].low - flagpoleHeight; // Projecting downwards from the breakout point
+            const targetPrice = lastCandle.low - flagpoleHeight; // Projecting downwards from the breakout point
 
             return {
                 patternFound: true,
@@ -229,7 +249,6 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
         console.error(error);
         throw new Error('Failed to retrieve candle data.');
     }
-
 }
 
 function rsiFormula(data) {
@@ -243,8 +262,9 @@ function rsiFormula(data) {
 }
 
 function macdFormula(data) {
-    const macdLine = data.valueMACD;
-    const signalLine = data.valueMACDSignal;
+    const macdLine = parseFloat(data.valueMACD).toFixed(4)
+    const signalLine = parseFloat(data.valueMACDSignal).toFixed(4)
+    console.log('data:', data)
     GLOBAL_VARIABLES.MacdValue = `MaccdLine: ${macdLine} SignalLine: ${signalLine}`
     console.log([macdLine, signalLine])
     if (macdLine > signalLine) return { direction: 'rise', value: 0 };
@@ -255,8 +275,8 @@ function macdFormula(data) {
 function bollingerBandsFormula(data) {
     // Assuming current price is middle band, though this may need to be fetched separately
     const price = GLOBAL_VARIABLES.assetPrice;
-    const upperBand = data.valueUpperBand;
-    const lowerBand = data.valueLowerBand;
+    const upperBand = parseFloat(data.valueUpperBand).toFixed(4);
+    const lowerBand = parseFloat(data.valueLowerBand).toFixed(4);
     GLOBAL_VARIABLES.bollValue = `Upper: ${upperBand} Lower: ${lowerBand}`
     console.log([price, upperBand, lowerBand])
     if (price > upperBand) return { direction: 'fall', value: 1 };
@@ -265,7 +285,7 @@ function bollingerBandsFormula(data) {
 }
 
 function fibonacciRetracementFormula(data) {
-    const retracementValue = data.value;
+    const retracementValue = parseFloat(data.value).toFixed(4);
     const currentTrend = data.trend;
     GLOBAL_VARIABLES.fibonValue = `Retrace: ${retracementValue} Trend: ${currentTrend}`
     console.log([retracementValue, currentTrend])
@@ -290,12 +310,12 @@ function voscFormula(data) {
     }
 }
 
-async function emaCrossoverFormula(cryptoAsset) {
-    const shortPeriod = 12;
-    const longPeriod = 26;
+async function emaCrossoverFormula(cryptoAsset, interval, period) {
+    const shortPeriod = period;
+    const longPeriod = period + 14;
 
-    const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=${shortPeriod}`;
-    const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&backtracks=2&period=${longPeriod}`;
+    const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${shortPeriod}`;
+    const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${longPeriod}`;
 
     try {
         const [shortEmaResponse, longEmaResponse] = await Promise.all([
@@ -310,10 +330,10 @@ async function emaCrossoverFormula(cryptoAsset) {
         const previousLongEma = longEmaResponse.data[1].value;
 
         // round to nearest integer
-        const roundedCurrentShortEma = Math.round(currentShortEma);
-        const roundedCurrentLongEma = Math.round(currentLongEma);
-        const roundedPreviousShortEma = Math.round(previousShortEma);
-        const roundedPreviousLongEma = Math.round(previousLongEma);
+        const roundedCurrentShortEma = parseFloat(currentShortEma.toFixed(4));
+        const roundedCurrentLongEma = parseFloat(currentLongEma.toFixed(4));
+        const roundedPreviousShortEma = parseFloat(previousShortEma.toFixed(4));
+        const roundedPreviousLongEma = parseFloat(previousLongEma.toFixed(4));
 
         // Update the GLOBAL_VARIABLES.emaValue with the rounded values
         GLOBAL_VARIABLES.emaValue = `CShort: ${roundedCurrentShortEma} CLong: ${roundedCurrentLongEma} PShort: ${roundedPreviousShortEma} Plong: ${roundedPreviousLongEma}`;
@@ -324,7 +344,7 @@ async function emaCrossoverFormula(cryptoAsset) {
         return { direction: 'neutral', value: '00' };
     } catch (error) {
         console.error(error);
-        throw new Error('Failed to retrieve EMA data.');
+        throw new Error('Failed to retrieve EMA data (function).');
     }
 }
 
