@@ -37,7 +37,9 @@ app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14 } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
 
-    formulaType !== "formula7" ? clearObject(GLOBAL_VARIABLES) : null;
+    if (formulaType !== "formula7") {
+        clearObject(GLOBAL_VARIABLES);
+    }
 
     // Grab asset price
     try {
@@ -312,8 +314,10 @@ function voscFormula(data) {
 }
 
 async function emaCrossoverFormula(cryptoAsset, interval, period) {
-    const shortPeriod = period;
-    const longPeriod = period + 14;
+
+    console.log('Period:', period, "Interval:", interval)
+    const shortPeriod = Number(period);
+    const longPeriod = Number(period) + 14;
 
     const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${shortPeriod}`;
     const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${longPeriod}`;
