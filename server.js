@@ -494,11 +494,11 @@ function evaluateAssetDirection(predictions) {
     return "neutral"; // Default to 'neutral' if unable to determine
 }
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const IP = '192.168.1.82'
 
-app.listen(PORT, IP, () => {
-    console.log(`Server is running on http://${IP}:${PORT}`);
+app.listen(PORT, () => {
+    // console.log(`Server is running on http://${IP}:${PORT}`);
 });
 
 app.get('/', getSymbols, (req, res) => {
