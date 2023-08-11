@@ -35,8 +35,22 @@ app.use(express.static(path.join(__dirname, '../frontend/public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '../frontend/views'));
 
+async function getSymbols(req, res, next) {
+    try {
+        const response = await axios.get(`https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=binance`);
+        req.symbols = response.data; // Assign the retrieved data to req.symbols
+        next(); // Call the next middleware or route handler
+    } catch (error) {
+        console.error(error);
+        // You might want to handle the error and send an appropriate response here
+        res.status(500).send('Failed to retrieve symbols data.');
+    }
+}
+
+
+
 app.post('/check-profitability', async (req, res) => {
-    const { cryptoAsset, formulaType, interval = '1h', period = 14 } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
+    const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
 
     if (formulaType !== "formula7") {
@@ -45,7 +59,7 @@ app.post('/check-profitability', async (req, res) => {
 
     // Grab asset price
     try {
-        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1m`)
+        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1m`)
         console.log(`Asset Price: ${response.data.value}`)
         GLOBAL_VARIABLES.assetPrice = response.data.value;
         GLOBAL_VARIABLES.name = cryptoAsset
@@ -487,6 +501,7 @@ app.listen(PORT, IP, () => {
     console.log(`Server is running on http://${IP}:${PORT}`);
 });
 
-app.get('/', (req, res) => {
-    res.render('index');
+app.get('/', getSymbols, (req, res) => {
+    let symbols = req.symbols.sort()
+    res.render('index', { symbols: symbols });
 });

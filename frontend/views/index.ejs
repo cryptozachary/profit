@@ -29,7 +29,14 @@
         <p id="result"></p>
     </div>
     <div class="container">
-        <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)" value="btc">
+        <select id="chooseAsset">
+            <% for (let symbol of symbols) { %>
+                <option value="<%= symbol %>">
+                    <%= symbol %>
+                </option>
+                <% } %>
+        </select>
+        <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)" value="btc" hidden>
         <select id="formula">
             <option value="all">All Strategies</option>
             <option value="formula1">RSI</option>

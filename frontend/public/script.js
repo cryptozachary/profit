@@ -3,6 +3,8 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
 
     const asset = document.getElementById('asset').value;
     const formula = document.getElementById('formula').value;
+    const chooseAsset = document.getElementById('chooseAsset').value
+    const [asset2, pair] = chooseAsset.split('/'); // Split the value
     const resultElement = document.getElementById('result');
     const intervalElement = document.getElementById('interval');
     const periodElement = document.getElementById('period');
@@ -15,6 +17,7 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
     const bollingerValueDisplay = document.getElementById('bollingerValue');
     const macdValueDisplay = document.getElementById('macdValue');
 
+    console.log(asset2, pair)
 
     try {
         if (asset === "") {
@@ -24,7 +27,8 @@ document.getElementById('checkProfitability').addEventListener('click', async ()
         // Check if the selected formula requires interval and period
         const formulasRequiringParams = ["formula1", "formula2"];
 
-        let requestBody = { cryptoAsset: asset, formulaType: formula };
+        let requestBody = { cryptoAsset: asset2, formulaType: formula, pair: pair };
+        console.log(requestBody)
 
         if (!intervalElement.disabled && !periodElement.disabled) {
             requestBody.interval = intervalElement.value;
