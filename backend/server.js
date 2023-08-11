@@ -1,10 +1,12 @@
 // server.js
 // Load environment variables
+const fs = require('fs');
 const path = require('path');
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const app = express();
+const { createCanvas, loadImage } = require('canvas');
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
@@ -72,6 +74,10 @@ app.post('/check-profitability', async (req, res) => {
                 `${interval}`,
                 `${period}`
             );
+            if (bearFlagPattern.patternFound) {
+                // Draw the bear flag pattern on a canvas
+                await drawBearFlag(bearFlagPattern.candleData);
+            }
             return res.json([{
                 isProfitable: bearFlagPattern.patternFound,
                 bearFlagPrice: bearFlagPattern.targetPrice,
@@ -178,7 +184,7 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
         const data = response.data;
 
         if (!data) {
-            return { patternFound: false }; // No data or invalid response
+            return { patternFound: false, candleData: null }; // No data or invalid response
         }
 
         // Check for bear flag pattern
@@ -229,8 +235,16 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
             }
         }
 
+        // Calculate the flagpole highs and lows
+        const candleDataWithFlagpole = data.map((candle, i) => {
+            if (i > 0 && candle.close < data[i - 1].close) {
+                return { ...candle, flagpole: { high: data[i - 1].high, low: candle.low } };
+            }
+            return candle;
+        });
+
         // Check for breakout below the flag's low boundary
-        const lastCandle = data[data.length - 1];
+        const lastCandle = candleDataWithFlagpole[candleDataWithFlagpole.length - 1];
         const flagLowBoundary = flagpoleLow * (1 + flagpoleThreshold);
         if (lastCandle.close > flagLowBoundary) {
             return { patternFound: false };
@@ -244,14 +258,109 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
                 patternFound: true,
                 targetPrice: targetPrice,
                 flagpoleHeight: flagpoleHeight,
+                candleData: candleDataWithFlagpole
             };
         }
 
-        return { patternFound: false }; // No bear flag pattern found
+        return { patternFound: false, candleData: candleDataWithFlagpole }; // No bear flag pattern found
     } catch (error) {
         console.error(error);
         throw new Error('Failed to retrieve candle data.');
     }
+}
+
+async function drawBearFlag(candleData) {
+    const canvasWidth = 1200; // Adjust as needed
+    const canvasHeight = 600; // Adjust as needed
+    const candleWidth = 20; // Adjust as needed
+    const flagpoleLineWidth = 2;
+    const flagpoleLineColor = 'red';
+    const flagColor = 'rgba(255, 0, 0, 0.3)';
+    const textFont = '14px Arial';
+
+    // Find the highest and lowest prices in the candle data
+    const prices = candleData.map((candle) => candle.high).concat(candleData.map((candle) => candle.low));
+    const maxPrice = Math.max(...prices);
+    const minPrice = Math.min(...prices);
+
+    // Calculate the scale for drawing the candle data on the canvas
+    const priceRange = maxPrice - minPrice;
+    const priceScale = canvasHeight / priceRange;
+
+    // Create a new canvas and context
+    const canvas = createCanvas(canvasWidth, canvasHeight);
+    const ctx = canvas.getContext('2d');
+
+    // Draw horizontal lines for major price levels (optional)
+    const priceStep = 100; // Adjust based on the price range
+    ctx.strokeStyle = '#d3d3d3';
+    ctx.lineWidth = 1;
+
+    for (let price = Math.ceil(minPrice / priceStep) * priceStep; price <= maxPrice; price += priceStep) {
+        const y = canvasHeight - (price - minPrice) * priceScale;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvasWidth, y);
+        ctx.stroke();
+    }
+
+    // Draw the bear flag pattern on the canvas
+    for (let i = 0; i < candleData.length; i++) {
+        const candle = candleData[i];
+        const x = i * candleWidth;
+        const yOpen = canvasHeight - (candle.open - minPrice) * priceScale;
+        const yHigh = canvasHeight - (candle.high - minPrice) * priceScale;
+        const yLow = canvasHeight - (candle.low - minPrice) * priceScale;
+        const yClose = canvasHeight - (candle.close - minPrice) * priceScale;
+
+        // Draw candle body
+        ctx.strokeStyle = candle.close < candle.open ? 'red' : 'green';
+        ctx.fillStyle = candle.close < candle.open ? 'red' : 'green';
+        ctx.fillRect(x + 2, yOpen, candleWidth - 4, yClose - yOpen);
+        ctx.strokeRect(x + 2, yOpen, candleWidth - 4, yClose - yOpen);
+
+        // Draw candle wick
+        ctx.beginPath();
+        ctx.moveTo(x + candleWidth / 2, yHigh);
+        ctx.lineTo(x + candleWidth / 2, yLow);
+        ctx.stroke();
+
+        // Draw the flagpole
+        if (candle.flagpole) {
+            const { high, low } = candle.flagpole;
+            const yFlagpoleHigh = canvasHeight - (high - minPrice) * priceScale;
+            const yFlagpoleLow = canvasHeight - (low - minPrice) * priceScale;
+
+            // Draw lines connecting flagpole highs and lows
+            ctx.strokeStyle = flagpoleLineColor;
+            ctx.lineWidth = flagpoleLineWidth;
+            ctx.beginPath();
+            ctx.moveTo(x + candleWidth / 2, yFlagpoleHigh);
+            ctx.lineTo(x + candleWidth / 2, yFlagpoleLow);
+            ctx.stroke();
+
+            // Draw the flag area
+            ctx.fillStyle = flagColor;
+            ctx.fillRect(x, yFlagpoleHigh, candleWidth, yFlagpoleLow - yFlagpoleHigh);
+        }
+    }
+
+    // Draw price labels for each candle
+    ctx.fillStyle = 'black';
+    ctx.font = textFont;
+    for (let i = 0; i < candleData.length; i++) {
+        const candle = candleData[i];
+        const x = i * candleWidth + 2;
+        const yClose = canvasHeight - (candle.close - minPrice) * priceScale - 18;
+        ctx.fillText(candle.close.toFixed(2), x, yClose);
+    }
+
+    // Save the canvas as an image (optional)
+
+    const out = fs.createWriteStream(__dirname + '/bear_flag_pattern.png');
+    const stream = canvas.createPNGStream();
+    stream.pipe(out);
+    out.on('finish', () => console.log('Bear flag pattern saved as bear_flag_pattern.png'));
 }
 
 function rsiFormula(data) {
