@@ -85,11 +85,15 @@ input[type="text"] {
 }
 
 /* Media Query for screens with a maximum width of 600px */
-@media (max-width: 768x) {
+@media only screen and (max-width: 768px) {
 
     header,
     footer {
-        min-width: 600px;
+        min-width: 0;
+        /* You might want to remove any min-width constraints on smaller screens */
     }
 
+    #result {
+        margin-top: 25px
+    }
 }
