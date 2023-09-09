@@ -84,7 +84,7 @@ app.post('/check-profitability', async (req, res) => {
             const bearFlagPattern = await getBearFlagSignal(
                 TAAPI_SECRET,
                 'binance',
-                `${cryptoAsset}/USDT`,
+                `${cryptoAsset}/${pair}`,
                 `${interval}`,
                 `${period}`
             );
@@ -107,11 +107,11 @@ app.post('/check-profitability', async (req, res) => {
     if (formulaType === 'all') {  // Check for all formulas
         try {
             const results = await Promise.all([
-                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
-                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
-                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
-                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h`),
-                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=1h&short_period=10&long_period=50`),
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
+                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
+                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h&short_period=10&long_period=50`),
                 emaCrossoverFormula(cryptoAsset, interval, period)
             ]);
 
@@ -498,7 +498,7 @@ const PORT = process.env.PORT || 3000;
 const IP = '192.168.1.82'
 
 app.listen(PORT, () => {
-    // console.log(`Server is running on http://${IP}:${PORT}`);
+    console.log(`Server is running on http://${IP}:${PORT}`);
 });
 
 app.get('/', getSymbols, (req, res) => {
