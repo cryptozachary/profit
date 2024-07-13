@@ -1,116 +1,114 @@
-document.getElementById('checkProfitability').addEventListener('click', async () => {
-    console.log('clicked');
+// Add event listeners for user interactions
+document.getElementById('checkProfitability').addEventListener('click', checkProfitability);
+document.getElementById('checkbox').addEventListener('change', toggleParameterInputs);
 
+// Function to handle the 'checkProfitability' button click
+async function checkProfitability() {
+    console.log('Check profitability clicked');
+
+    // Retrieve input values from the DOM
     const asset = document.getElementById('asset').value;
     const formula = document.getElementById('formula').value;
-    const chooseAsset = document.getElementById('chooseAsset').value
-    const [asset2, pair] = chooseAsset.split('/'); // Split the value
-    const resultElement = document.getElementById('result');
-    const intervalElement = document.getElementById('interval');
-    const periodElement = document.getElementById('period');
-    const assetNameDisplay = document.getElementById('assetName');
-    const assetPriceDisplay = document.getElementById('assetPriceDisplay');
-    const rsiValueDisplay = document.getElementById('rsiValue');
-    const volumeValueDisplay = document.getElementById('volumeValue');
-    const fibonacciValueDisplay = document.getElementById('fibonacciValue');
-    const emaValueDisplay = document.getElementById('emaValue');
-    const bollingerValueDisplay = document.getElementById('bollingerValue');
-    const macdValueDisplay = document.getElementById('macdValue');
+    const chooseAsset = document.getElementById('chooseAsset').value;
+    const [asset2, pair] = chooseAsset.split('/');
 
-    console.log(asset2, pair)
+
+    // Validate asset input
+    if (asset.trim() === "") {
+        return displayError("Please enter a valid asset ticker symbol");
+    }
 
     try {
-        if (asset === "") {
-            return resultElement.textContent = "Please enter a valid asset ticker symbol";
-        }
-
-        // Check if the selected formula requires interval and period
-        const formulasRequiringParams = ["formula1", "formula2"];
-
-        let requestBody = { cryptoAsset: asset2, formulaType: formula, pair: pair };
-        console.log(requestBody)
-
-        if (!intervalElement.disabled && !periodElement.disabled) {
-            requestBody.interval = intervalElement.value;
-            requestBody.period = periodElement.value;
-            console.log(`Interval: ${intervalElement.value}, Period: ${periodElement.value}`);
-        }
-
-        const response = await fetch('/check-profitability', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-
-
-        if (response.ok) {
-            const data = await response.json();
-            const prediction = data[0].isProfitable;
-
-            console.log(data)
-
-            assetNameDisplay.textContent = data[1].name.toUpperCase()
-            assetPriceDisplay.textContent = data[1].assetPrice;
-            rsiValueDisplay.textContent = data[1].rsiValue;
-            volumeValueDisplay.textContent = data[1].volumeValue
-            fibonacciValueDisplay.textContent = data[1].fibonValue
-            emaValueDisplay.textContent = data[1].emaValue
-            bollingerValueDisplay.textContent = data[1].bollValue
-            macdValueDisplay.textContent = data[1].MacdValue
-
-            if (prediction === 'rise') {
-                resultElement.textContent = "The asset is likely to increase in price!";
-            }
-
-            if (prediction === 'fall') {
-                resultElement.textContent = "The asset is likely to decrease in price!";
-            }
-
-            if (prediction === false) {
-                resultElement.textContent = "Bear Flag does not exist"
-            }
-
-            if (prediction === 'neutral') {
-                resultElement.textContent = "The asset's price movement is uncertain.";
-            }
-
-            if (prediction === true) {
-                resultElement.textContent = `Bearflag pattern exist with price target of ${data[0].bearFlagPrice} and flag pole height of ${data[0].bearFlagHeight}`
-            }
-
-            // if (!prediction || (prediction !== 'rise' && prediction !== 'fall')) {
-            //     resultElement.textContent = "The asset's price movement is uncertain.";
-            // }
-
-        } else {
-            console.error('Server returned an error:', await response.text());
-        }
-
+        // Build the request body with necessary parameters
+        const requestBody = buildRequestBody(asset2, formula, pair);
+        // Send the request and process the response
+        const response = await fetchData('/check-profitability', requestBody);
+        await processResponse(response);
     } catch (error) {
         console.error("Error:", error);
+        displayError(error)
     }
-});
+}
 
-document.getElementById('checkbox').addEventListener('change', (event) => {
-    let checkbox = document.querySelector('#checkbox')
-    let parameters = document.querySelectorAll('.params')
-    if (checkbox.checked) {
-        parameters.forEach(item => {
-            item.disabled = false;
-        });
-    } else {
-        parameters.forEach(item => {
-            item.disabled = true;
-        });
+// Constructs the request body with user inputs and additional required params
+function buildRequestBody(asset2, formula, pair) {
+    const requestBody = { cryptoAsset: asset2, formulaType: formula, pair: pair };
+
+    // Include interval and period in the request if they are enabled
+    if (!document.getElementById('interval').disabled && !document.getElementById('period').disabled) {
+        requestBody.interval = document.getElementById('interval').value;
+        requestBody.period = document.getElementById('period').value;
     }
-    //     const formulasRequiringParams = ["formula1", "formula2"]; // Replace with actual formulas requiring these parameters
-    //     const formulaParametersDiv = document.getElementById('formulaParameters');
 
-    //     if (formulasRequiringParams.includes(event.target.value)) {
-    //         formulaParametersDiv.style.display = 'block';
-    //     } else {
-    //         formulaParametersDiv.style.display = 'none';
-    //     }
-});
+    return requestBody;
+}
+
+// Function to fetch data from the server
+async function fetchData(url, body) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
+    if (!response.ok) {
+        throw new Error('Server returned an error: ' + await response.text());
+    }
+    return response.json();
+}
+
+// Process server response and update the UI accordingly
+async function processResponse(data) {
+    console.log(data)
+    const prediction = data[0].isProfitable;
+    updateDisplays(data[1]);
+    updateResultMessage(prediction, data[0]);
+}
+
+// Update display elements with the data received from the server
+function updateDisplays(data) {
+    document.getElementById('assetName').textContent = data.name.toUpperCase();
+    document.getElementById('assetPriceDisplay').textContent = data.assetPrice;
+    document.getElementById('rsiValue').textContent = data.rsiValue;
+    document.getElementById('volumeValue').textContent = data.volumeValue;
+    document.getElementById('fibonacciValue').textContent = data.fibonValue;
+    document.getElementById('emaValue').textContent = data.emaValue;
+    document.getElementById('bollingerValue').textContent = data.bollValue;
+    document.getElementById('macdValue').textContent = data.MacdValue;
+}
+
+// Determine and display the appropriate result message based on the prediction
+function updateResultMessage(prediction, data) {
+    console.log(prediction)
+    const resultElement = document.getElementById('result');
+    switch (prediction) {
+        case 'rise':
+            resultElement.textContent = "The asset is likely to increase in price!";
+            break;
+        case 'fall':
+            resultElement.textContent = "The asset is likely to decrease in price!";
+            break;
+        case false:
+            resultElement.textContent = `${data.theError}`;
+            break;
+        case 'neutral':
+            resultElement.textContent = "The asset's price movement is uncertain.";
+            break;
+        case true:
+            resultElement.textContent = `Bearflag pattern exist with price target of ${data.bearFlagPrice} and flag pole height of ${data.bearFlagHeight}`;
+            break;
+        default:
+            resultElement.textContent = "The asset's price movement is uncertain.";
+            break;
+    }
+}
+
+// Display an error message in the result display area
+function displayError(message) {
+    document.getElementById('result').textContent = message;
+}
+
+// Enable or disable parameter inputs based on checkbox state
+function toggleParameterInputs(event) {
+    const isChecked = event.target.checked;
+    document.querySelectorAll('.params').forEach(item => item.disabled = !isChecked);
+}

@@ -96,12 +96,39 @@ app.post('/check-profitability', async (req, res) => {
                 isProfitable: bearFlagPattern.patternFound,
                 bearFlagPrice: bearFlagPattern.targetPrice,
                 bearFlagHeight: bearFlagPattern.flagpoleHeight,
+                theError: bearFlagPattern.error,
             }, GLOBAL_VARIABLES]);
         } catch (error) {
             console.error(error);
             return res.status(500).send('Failed to retrieve bear flag pattern data.');
         }
     }
+
+    if (formulaType === 'formula8') { // Bull Flag Pattern
+        try {
+            const bullFlagPattern = await getBullFlagSignal(
+                TAAPI_SECRET,
+                'binance',
+                `${cryptoAsset}/${pair}`,
+                `${interval}`,
+                `${period}`
+            );
+            if (bullFlagPattern.patternFound) {
+                // Draw the bear flag pattern on a canvas
+                await drawBearFlag(bullFlagPattern.candleData);
+            }
+            return res.json([{
+                isProfitable: bullFlagPattern.patternFound,
+                bearFlagPrice: bullFlagPattern.targetPrice,
+                bearFlagHeight: bullFlagPattern.flagpoleHeight,
+                theError: bullFlagPattern.error,
+            }, GLOBAL_VARIABLES]);
+        } catch (error) {
+            console.error(error);
+            return res.status(500).send('Failed to retrieve bull flag pattern data.');
+        }
+    }
+
 
 
     if (formulaType === 'all') {  // Check for all formulas
@@ -170,6 +197,7 @@ app.post('/check-profitability', async (req, res) => {
         res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]);
     } catch (error) {
         console.error(error);
+        res.json({ Message: 'Nope' })
         res.status(500).send('Failed to retrieve indicator data.');
     }
 });
@@ -191,96 +219,290 @@ function determineProfitability(data, formula) {
     }
 }
 
-async function getBearFlagSignal(api_secret, exchange, symbol, interval, period = 14) {
+async function getBearFlagSignal(api_secret, exchange, symbol, interval, period = 14, options = {}) {
+    // Constants and configurable parameters
+    const {
+        minFlagDuration = 5,
+        flagpoleThreshold = 0.02,
+        flagThreshold = 0.01,
+        volumeDecreaseThreshold = 0.8,
+        breakoutVolumeIncrease = 1.5,
+        significantDowntrendPercentage = 0.05,
+        maxPatternDuration = 30
+    } = options;
+
     const url = `https://api.taapi.io/candles?secret=${api_secret}&exchange=${exchange}&symbol=${symbol}&interval=${interval}&period=${period}`;
+
     try {
         const response = await axios.get(url);
         const data = response.data;
 
-        if (!data) {
-            return { patternFound: false, candleData: null }; // No data or invalid response
+        if (!data || data.length < period) {
+            return { patternFound: false, candleData: null, error: "Insufficient data" };
         }
 
-        // Check for bear flag pattern
-        const minFlagDuration = 5;
-        const flagpoleThreshold = 0.02; // 2% threshold for flagpole boundary
-        const flagThreshold = 0.01; // 1% threshold for flag boundary
+        let flagpoleStart = -1;
         let flagpoleHigh = 0;
-        let flagpoleLow = 0;
-        let flagDuration = 0;
+        let flagpoleLow = Infinity;
+        let flagStart = -1;
+        let volumeDuringFlagpole = 0;
         let volumeDuringFlag = 0;
-        let slopeCheck = true;
+        let flagDuration = 0;
+        let patternScore = 0;
 
+        // Find significant downtrend (flagpole)
         for (let i = 1; i < data.length; i++) {
-            // Check for downtrend (flagpole)
-            if (data[i].close < data[i - 1].close) {
-                if (flagpoleHigh === 0) {
-                    flagpoleHigh = data[i - 1].high;
-                    flagpoleLow = data[i].low;
-                    flagDuration = 1;
-                    volumeDuringFlag = data[i].volume;
-                } else {
-                    // Update flagpoleHigh and flagpoleLow if a new high or low is detected
-                    flagpoleHigh = Math.max(flagpoleHigh, data[i - 1].high);
-                    flagpoleLow = Math.min(flagpoleLow, data[i].low);
+            if (data[i] && data[i - 1] && (data[i - 1].high - data[i].low) / data[i - 1].high > significantDowntrendPercentage) {
+                flagpoleStart = i - 1;
+                break;
+            }
+        }
 
-                    // Check for volume decrease during flag
-                    volumeDuringFlag += data[i].volume;
-                    flagDuration++;
+        if (flagpoleStart === -1) {
+            return { patternFound: false, candleData: data, error: "No significant downtrend found" };
+        }
 
-                    if (flagDuration >= minFlagDuration) {
-                        const avgVolumeFlagpole = volumeDuringFlag / flagDuration;
-                        if (data[i].volume < avgVolumeFlagpole) {
-                            slopeCheck = slopeCheck && (data[i].close < data[i - 1].close);
+        // Analyze flagpole and flag
+        for (let i = flagpoleStart; i < data.length; i++) {
+            if (!data[i]) continue;  // Skip if current candle is undefined
 
-                            // Check for flag boundaries
-                            const flagHighBoundary = flagpoleHigh * (1 - flagpoleThreshold);
-                            const flagLowBoundary = flagpoleLow * (1 + flagpoleThreshold);
-                            if (data[i].high > flagHighBoundary || data[i].low < flagLowBoundary) {
-                                slopeCheck = false;
-                                break;
-                            }
-                        } else {
-                            slopeCheck = false;
-                            break;
-                        }
+            if (flagStart === -1) {
+                // Still in flagpole
+                flagpoleHigh = Math.max(flagpoleHigh, data[i].high);
+                flagpoleLow = Math.min(flagpoleLow, data[i].low);
+                volumeDuringFlagpole += data[i].volume;
+
+                // Check for potential start of flag
+                if (i > 0 && data[i - 1] && data[i].close > data[i - 1].close) {
+                    flagStart = i;
+                }
+            } else {
+                // In flag formation
+                flagDuration++;
+                volumeDuringFlag += data[i].volume;
+
+                // Check flag boundaries
+                const flagHighBoundary = flagpoleHigh * (1 - flagThreshold);
+                const flagLowBoundary = flagpoleLow * (1 + flagThreshold);
+
+                if (data[i].high > flagHighBoundary || data[i].low < flagLowBoundary) {
+                    break;
+                }
+
+                // Check for breakout
+                if (data[i].close < flagLowBoundary) {
+                    const avgVolumeFlagpole = volumeDuringFlagpole / (flagStart - flagpoleStart);
+                    const avgVolumeFlag = volumeDuringFlag / flagDuration;
+
+                    if (avgVolumeFlag < avgVolumeFlagpole * volumeDecreaseThreshold &&
+                        data[i].volume > avgVolumeFlag * breakoutVolumeIncrease &&
+                        flagDuration >= minFlagDuration &&
+                        i - flagpoleStart <= maxPatternDuration) {
+
+                        // Calculate pattern score
+                        patternScore = calculatePatternScore(data, flagpoleStart, flagStart, i,
+                            avgVolumeFlagpole, avgVolumeFlag);
+
+                        const flagpoleHeight = flagpoleHigh - flagpoleLow;
+                        const targetPrice = data[i].low - flagpoleHeight;
+
+                        return {
+                            patternFound: true,
+                            targetPrice: targetPrice,
+                            flagpoleHeight: flagpoleHeight,
+                            patternScore: patternScore,
+                            candleData: data,
+                            flagpoleStartIndex: flagpoleStart,
+                            flagStartIndex: flagStart,
+                            breakoutIndex: i
+                        };
+                    }
+                }
+            }
+        }
+        console.log('no Bear')
+        return { patternFound: false, candleData: data, error: "No valid bear flag pattern found" };
+    } catch (error) {
+        console.error(error);
+        if (error.response) {
+            throw new Error(`API error: ${error.response.status} - ${error.response.data}`);
+        } else if (error.request) {
+            throw new Error("Network error: No response received from the server");
+        } else {
+            throw new Error(`Error in processing request: ${error.message}`);
+        }
+    }
+}
+
+function calculatePatternScore(data, flagpoleStart, flagStart, breakoutIndex, avgVolumeFlagpole, avgVolumeFlag) {
+    let score = 0;
+
+    // Ensure all required data points exist
+    if (!data[flagpoleStart] || !data[flagStart - 1] || !data[breakoutIndex] || !data[breakoutIndex - 1]) {
+        return 0;  // Return 0 if any required data point is missing
+    }
+
+    // Score based on flagpole strength
+    const flagpoleStrength = (data[flagpoleStart].high - data[flagStart - 1].low) / data[flagpoleStart].high;
+    score += flagpoleStrength * 40;  // Max 40 points
+
+    // Score based on flag duration
+    const idealFlagDuration = 7;
+    const flagDuration = breakoutIndex - flagStart;
+    score += (1 - Math.abs(flagDuration - idealFlagDuration) / idealFlagDuration) * 20;  // Max 20 points
+
+    // Score based on volume characteristics
+    const volumeDecrease = 1 - (avgVolumeFlag / avgVolumeFlagpole);
+    score += volumeDecrease * 20;  // Max 20 points
+
+    // Score based on breakout strength
+    const breakoutStrength = (data[breakoutIndex - 1].close - data[breakoutIndex].close) / data[breakoutIndex - 1].close;
+    score += breakoutStrength * 20;  // Max 20 points
+
+    return Math.min(Math.round(score), 100);  // Ensure score is between 0 and 100
+}
+
+async function getBullFlagSignal(api_secret, exchange, symbol, interval, period = 14, options = {}) {
+    // Constants and configurable parameters
+    const {
+        minFlagDuration = 5,
+        flagpoleThreshold = 0.02,
+        flagThreshold = 0.01,
+        volumeDecreaseThreshold = 0.8,
+        breakoutVolumeIncrease = 1.5,
+        significantUptrendPercentage = 0.05,
+        maxPatternDuration = 30
+    } = options;
+
+    const url = `https://api.taapi.io/candles?secret=${api_secret}&exchange=${exchange}&symbol=${symbol}&interval=${interval}&period=${period}`;
+
+    try {
+        const response = await axios.get(url);
+        const data = response.data;
+
+        if (!data || data.length < period) {
+            return { patternFound: false, candleData: null, error: "Insufficient data" };
+        }
+
+        let flagpoleStart = -1;
+        let flagpoleHigh = -Infinity;
+        let flagpoleLow = Infinity;
+        let flagStart = -1;
+        let volumeDuringFlagpole = 0;
+        let volumeDuringFlag = 0;
+        let flagDuration = 0;
+        let patternScore = 0;
+
+        // Find significant uptrend (flagpole)
+        for (let i = 1; i < data.length; i++) {
+            if (data[i] && data[i - 1] && (data[i].high - data[i - 1].low) / data[i - 1].low > significantUptrendPercentage) {
+                flagpoleStart = i - 1;
+                break;
+            }
+        }
+
+        if (flagpoleStart === -1) {
+            return { patternFound: false, candleData: data, error: "No significant uptrend found" };
+        }
+
+        // Analyze flagpole and flag
+        for (let i = flagpoleStart; i < data.length; i++) {
+            if (!data[i]) continue;  // Skip if current candle is undefined
+
+            if (flagStart === -1) {
+                // Still in flagpole
+                flagpoleHigh = Math.max(flagpoleHigh, data[i].high);
+                flagpoleLow = Math.min(flagpoleLow, data[i].low);
+                volumeDuringFlagpole += data[i].volume;
+
+                // Check for potential start of flag
+                if (i > 0 && data[i - 1] && data[i].close < data[i - 1].close) {
+                    flagStart = i;
+                }
+            } else {
+                // In flag formation
+                flagDuration++;
+                volumeDuringFlag += data[i].volume;
+
+                // Check flag boundaries
+                const flagHighBoundary = flagpoleHigh * (1 + flagThreshold);
+                const flagLowBoundary = flagpoleLow * (1 - flagThreshold);
+
+                if (data[i].high > flagHighBoundary || data[i].low < flagLowBoundary) {
+                    break;
+                }
+
+                // Check for breakout
+                if (data[i].close > flagHighBoundary) {
+                    const avgVolumeFlagpole = volumeDuringFlagpole / (flagStart - flagpoleStart);
+                    const avgVolumeFlag = volumeDuringFlag / flagDuration;
+
+                    if (avgVolumeFlag < avgVolumeFlagpole * volumeDecreaseThreshold &&
+                        data[i].volume > avgVolumeFlag * breakoutVolumeIncrease &&
+                        flagDuration >= minFlagDuration &&
+                        i - flagpoleStart <= maxPatternDuration) {
+
+                        // Calculate pattern score
+                        patternScore = calculateBullFlagPatternScore(data, flagpoleStart, flagStart, i,
+                            avgVolumeFlagpole, avgVolumeFlag);
+
+                        const flagpoleHeight = flagpoleHigh - flagpoleLow;
+                        const targetPrice = data[i].high + flagpoleHeight;
+
+                        return {
+                            patternFound: true,
+                            targetPrice: targetPrice,
+                            flagpoleHeight: flagpoleHeight,
+                            patternScore: patternScore,
+                            candleData: data,
+                            flagpoleStartIndex: flagpoleStart,
+                            flagStartIndex: flagStart,
+                            breakoutIndex: i
+                        };
                     }
                 }
             }
         }
 
-        // Calculate the flagpole highs and lows
-        const candleDataWithFlagpole = data.map((candle, i) => {
-            if (i > 0 && candle.close < data[i - 1].close) {
-                return { ...candle, flagpole: { high: data[i - 1].high, low: candle.low } };
-            }
-            return candle;
-        });
-
-        // Check for breakout below the flag's low boundary
-        const lastCandle = candleDataWithFlagpole[candleDataWithFlagpole.length - 1];
-        const flagLowBoundary = flagpoleLow * (1 + flagpoleThreshold);
-        if (lastCandle.close > flagLowBoundary) {
-            return { patternFound: false };
-        }
-
-        if (slopeCheck) {
-            const flagpoleHeight = flagpoleHigh - flagpoleLow;
-            const targetPrice = lastCandle.low - flagpoleHeight; // Projecting downwards from the breakout point
-
-            return {
-                patternFound: true,
-                targetPrice: targetPrice,
-                flagpoleHeight: flagpoleHeight,
-                candleData: candleDataWithFlagpole
-            };
-        }
-
-        return { patternFound: false, candleData: candleDataWithFlagpole }; // No bear flag pattern found
+        return { patternFound: false, candleData: data, error: "No valid bull flag pattern found" };
     } catch (error) {
         console.error(error);
-        throw new Error('Failed to retrieve candle data.');
+        if (error.response) {
+            throw new Error(`API error: ${error.response.status} - ${error.response.data}`);
+        } else if (error.request) {
+            throw new Error("Network error: No response received from the server");
+        } else {
+            throw new Error(`Error in processing request: ${error.message}`);
+        }
     }
+}
+
+function calculateBullFlagPatternScore(data, flagpoleStart, flagStart, breakoutIndex, avgVolumeFlagpole, avgVolumeFlag) {
+    let score = 0;
+
+    // Ensure all required data points exist
+    if (!data[flagpoleStart] || !data[flagStart - 1] || !data[breakoutIndex] || !data[breakoutIndex - 1]) {
+        return 0;  // Return 0 if any required data point is missing
+    }
+
+    // Score based on flagpole strength
+    const flagpoleStrength = (data[flagStart - 1].high - data[flagpoleStart].low) / data[flagpoleStart].low;
+    score += flagpoleStrength * 40;  // Max 40 points
+
+    // Score based on flag duration
+    const idealFlagDuration = 7;
+    const flagDuration = breakoutIndex - flagStart;
+    score += (1 - Math.abs(flagDuration - idealFlagDuration) / idealFlagDuration) * 20;  // Max 20 points
+
+    // Score based on volume characteristics
+    const volumeDecrease = 1 - (avgVolumeFlag / avgVolumeFlagpole);
+    score += volumeDecrease * 20;  // Max 20 points
+
+    // Score based on breakout strength
+    const breakoutStrength = (data[breakoutIndex].close - data[breakoutIndex - 1].close) / data[breakoutIndex - 1].close;
+    score += breakoutStrength * 20;  // Max 20 points
+
+    return Math.min(Math.round(score), 100);  // Ensure score is between 0 and 100
 }
 
 async function drawBearFlag(candleData) {
