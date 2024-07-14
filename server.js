@@ -92,8 +92,8 @@ app.post('/check-profitability', async (req, res) => {
             }
             return res.json([{
                 isProfitable: bearFlagPattern.patternFound,
-                bearFlagPrice: bearFlagPattern.targetPrice,
-                bearFlagHeight: bearFlagPattern.flagpoleHeight,
+                flagPrice: bearFlagPattern.targetPrice,
+                flagHeight: bearFlagPattern.flagpoleHeight,
                 theError: bearFlagPattern.error,
             }, GLOBAL_VARIABLES]);
         } catch (error) {
@@ -117,8 +117,8 @@ app.post('/check-profitability', async (req, res) => {
             }
             return res.json([{
                 isProfitable: bullFlagPattern.patternFound,
-                bearFlagPrice: bullFlagPattern.targetPrice,
-                bearFlagHeight: bullFlagPattern.flagpoleHeight,
+                flagPrice: bullFlagPattern.targetPrice,
+                flagHeight: bullFlagPattern.flagpoleHeight,
                 theError: bullFlagPattern.error,
             }, GLOBAL_VARIABLES]);
         } catch (error) {

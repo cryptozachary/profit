@@ -97,11 +97,11 @@ async function updateUIWithPairData(pair) {
 
         // Update UI with the received data
         updateElementValue('#chooseAsset', pair);
-        updateElementText('price', data.assetPrice);
-        updateElementText('assetName', data.name?.toUpperCase());
+        //updateElementText('price', data.assetPrice);
+        //updateElementText('assetName', data.name?.toUpperCase());
 
         const resultText = data.bullFlag?.patternFound ? 'Bull Flag Detected' :
-            (data.bearFlag?.patternFound ? 'Bear Flag Detected' : 'No Flag Detected');
+            (data.bearFlag?.patternFound ? 'Bear Flag Detected' : `No Flag Detected for: ${data.name} / ${currency}`);
         updateElementText('flagResult', resultText);
 
         if (data) {
@@ -182,7 +182,7 @@ async function fetchData(url, body) {
 }
 
 async function processResponse(data) {
-    console.log(data);
+    console.log("Show Data:", data);
     if (Array.isArray(data) && data.length >= 2) {
         const prediction = data[0].isProfitable;
         updateDisplays(data[1]);
@@ -220,7 +220,7 @@ function updateResultMessage(prediction, data) {
             resultText = "The asset's price movement is uncertain.";
             break;
         case true:
-            resultText = `Bearflag pattern exist with price target of ${data.bearFlagPrice} and flag pole height of ${data.bearFlagHeight}`;
+            resultText = `Bearflag pattern exist with price target of ${data.flagPrice} and flag pole height of ${data.flagHeight}`;
             break;
         default:
             resultText = "The asset's price movement is uncertain.";
