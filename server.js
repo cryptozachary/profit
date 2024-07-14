@@ -206,11 +206,22 @@ app.get('/scan/:asset/:currency', async (req, res) => {
     const currency = req.params.currency;
     const pair = `${asset}/${currency}`;
     const interval = req.query.interval || '1h';
+    const period = parseInt(req.query.period) || 14;
 
     try {
-        const bullResult = await getBullFlagSignal(TAAPI_SECRET, 'binance', pair, interval);
-        const bearResult = await getBearFlagSignal(TAAPI_SECRET, 'binance', pair, interval);
+        const bullResult = await getBullFlagSignal(TAAPI_SECRET, 'binance', pair, interval, period);
+        const bearResult = await getBearFlagSignal(TAAPI_SECRET, 'binance', pair, interval, period);
         const pairData = await getPairData(asset, currency, interval);
+
+        // Log bull flag if detected
+        if (bullResult.patternFound) {
+            await logFlagPattern(pair, 'Bull', bullResult.targetPrice, bullResult.flagpoleHeight);
+        }
+
+        // Log bear flag if detected
+        if (bearResult.patternFound) {
+            await logFlagPattern(pair, 'Bear', bearResult.targetPrice, bearResult.flagpoleHeight);
+        }
 
         res.json({
             pair,
@@ -233,6 +244,7 @@ app.get('/scan/:asset/:currency', async (req, res) => {
 });
 
 async function getPairData(cryptoAsset, quoteCurrency, interval) {
+
     try {
         let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${quoteCurrency}&interval=${interval}`);
         console.log(`Asset Price: ${response.data.value}`);
@@ -264,6 +276,8 @@ function determineProfitability(data, formula) {
 }
 
 async function getBearFlagSignal(api_secret, exchange, symbol, interval, period = 14, options = {}) {
+
+    console.log(`Show BearFlagData: ${period}, ${interval}`)
     // Constants and configurable parameters
     const {
         minFlagDuration = 5,
@@ -549,6 +563,24 @@ function calculateBullFlagPatternScore(data, flagpoleStart, flagStart, breakoutI
     return Math.min(Math.round(score), 100);  // Ensure score is between 0 and 100
 }
 
+async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
+    const logDir = path.join(__dirname, 'logs');
+    const logFile = path.join(logDir, 'flag_patterns.log');
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${pair} - ${flagType} Flag detected. Target Price: ${targetPrice}, Flagpole Height: ${flagpoleHeight}\n`;
+
+    try {
+        // Create logs directory if it doesn't exist
+        await fs.mkdir(logDir, { recursive: true });
+
+        // Append to the log file
+        await fs.appendFile(logFile, logEntry);
+        console.log(`Flag pattern logged for ${pair}`);
+    } catch (error) {
+        console.error('Error logging flag pattern:', error);
+    }
+}
+
 async function drawBearFlag(candleData) {
     const canvasWidth = 1200; // Adjust as needed
     const canvasHeight = 600; // Adjust as needed
@@ -704,7 +736,6 @@ function voscFormula(data) {
 
 async function emaCrossoverFormula(cryptoAsset, interval, period) {
 
-    console.log('Period:', period, "Interval:", interval)
     const shortPeriod = Number(period);
     const longPeriod = Number(period) + 14;
 
@@ -739,6 +770,7 @@ async function emaCrossoverFormula(cryptoAsset, interval, period) {
     } catch (error) {
         console.error(error);
         throw new Error('Failed to retrieve EMA data (function).');
+        return
     }
 }
 

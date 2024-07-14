@@ -80,7 +80,8 @@ async function updateUIWithPairData(pair) {
     try {
         const [asset, currency] = pair.split('/');
         const interval = document.querySelector('#interval').value;
-        const response = await fetch(`/scan/${asset}/${currency}?interval=${interval}`);
+        const period = document.getElementById('period').value;
+        const response = await fetch(`/scan/${asset}/${currency}?interval=${interval}&period=${period}`);
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
