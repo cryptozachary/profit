@@ -84,6 +84,35 @@ input[type="text"] {
     min-width: 50vw;
 }
 
+.scan-controls {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: flex-end;
+}
+
+.toggle-button {
+    padding: 10px 20px;
+    background-color: #28a745;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.toggle-button.active {
+    background-color: #dc3545;
+}
+
+#scanInterval {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+    background: #f9f9f9;
+    padding: 10px;
+    border-radius: 5px;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
 /* Media Query for screens with a maximum width of 600px */
 @media only screen and (max-width: 768px) {
 

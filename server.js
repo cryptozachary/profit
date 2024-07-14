@@ -47,8 +47,6 @@ async function getSymbols(req, res, next) {
     }
 }
 
-
-
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
@@ -201,6 +199,52 @@ app.post('/check-profitability', async (req, res) => {
         res.status(500).send('Failed to retrieve indicator data.');
     }
 });
+
+// Add an endpoint for scanning a specific pair
+app.get('/scan/:asset/:currency', async (req, res) => {
+    const asset = req.params.asset;
+    const currency = req.params.currency;
+    const pair = `${asset}/${currency}`;
+    const interval = req.query.interval || '1h';
+
+    try {
+        const bullResult = await getBullFlagSignal(TAAPI_SECRET, 'binance', pair, interval);
+        const bearResult = await getBearFlagSignal(TAAPI_SECRET, 'binance', pair, interval);
+        const pairData = await getPairData(asset, currency, interval);
+
+        res.json({
+            pair,
+            bullFlag: bullResult,
+            bearFlag: bearResult,
+            ...pairData
+        });
+    } catch (error) {
+        console.error('Error in /scan/:asset/:currency:', error);
+        res.status(500).json({
+            error: 'An error occurred while scanning',
+            message: error.message,
+            pair,
+            bullFlag: { patternFound: false },
+            bearFlag: { patternFound: false },
+            assetPrice: 'N/A',
+            name: asset
+        });
+    }
+});
+
+async function getPairData(cryptoAsset, quoteCurrency, interval) {
+    try {
+        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${quoteCurrency}&interval=${interval}`);
+        console.log(`Asset Price: ${response.data.value}`);
+        return {
+            assetPrice: response.data.value,
+            name: cryptoAsset
+        };
+    } catch (error) {
+        console.error('Error in getPairData:', error);
+        throw new Error('Failed to retrieve Asset Price');
+    }
+}
 
 function determineProfitability(data, formula) {
     switch (formula) {
