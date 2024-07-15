@@ -132,32 +132,38 @@ app.post('/check-profitability', async (req, res) => {
     if (formulaType === 'all') {  // Check for all formulas
         try {
             const results = await Promise.all([
-                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
-                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
-                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
-                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h`),
+
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=30`),
+                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
                 axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h&short_period=10&long_period=50`),
                 emaCrossoverFormula(cryptoAsset, interval, period)
             ]);
 
             const predictions = results.map((response, index) => {
                 switch (index) {
-                    case 0:
-                        return rsiFormula(response.data);
+                    case 0: if (results[1] && results[1].data) {
+                        return rsiFormula(response.data, results[1].data.value);
+                    }
                     case 1:
-                        return macdFormula(response.data);
+                        return null
+                        break;
                     case 2:
-                        return bollingerBandsFormula(response.data);
+                        return macdFormula(response.data);
                     case 3:
-                        return fibonacciRetracementFormula(response.data);
+                        return bollingerBandsFormula(response.data);
                     case 4:
-                        return voscFormula(response.data);
+                        return fibonacciRetracementFormula(response.data);
                     case 5:
+                        return voscFormula(response.data);
+                    case 6:
                         return response;  // EMA result is already a prediction
                     default:
                         return { direction: 'neutral', value: '00' };
                 }
-            });
+            }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
 
             const overallPrediction = evaluateAssetDirection(predictions);
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES]);
@@ -171,27 +177,41 @@ app.post('/check-profitability', async (req, res) => {
     const baseEndpoint = `https://api.taapi.io/`;
     const commonParams = `secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}`;
 
+
     switch (formulaType) {
         case 'formula1':  // Using RSI
-            endpoint = `${baseEndpoint}rsi?${commonParams}`;
+            endpoint = {
+                ep: `${baseEndpoint}rsi?${commonParams}&period=${period}`,
+                ep2: `${baseEndpoint}rsi?${commonParams}&period=${period}&results=30`
+            };
             break;
         case 'formula2':  // Using MACD
-            endpoint = `${baseEndpoint}macd?${commonParams}`;
+            endpoint = { ep: `${baseEndpoint}macd?${commonParams}` };
             break;
         case 'formula3':  // Using Bollinger Bands
-            endpoint = `${baseEndpoint}bbands?${commonParams}`;
+            endpoint = { ep: `${baseEndpoint}bbands?${commonParams}` };
             break;
         case 'formula4':  // Using Fibonacci retracement
-            endpoint = `${baseEndpoint}fibonacciretracement?${commonParams}`;
+            endpoint = { ep: `${baseEndpoint}fibonacciretracement?${commonParams}` };
             break;
         case 'formula5':  // Using VOSC
-            endpoint = `${baseEndpoint}vosc?${commonParams}&short_period=10&long_period=50`;
+            endpoint = { ep: `${baseEndpoint}vosc?${commonParams}&short_period=10&long_period=50` };
             break;
     }
 
     try {
-        const response = await axios.get(endpoint);
-        const prediction = determineProfitability(response.data, formulaType);
+        // Create an array of promises for the endpoints that are defined
+        let promises = [];
+        if (endpoint.ep) promises.push(axios.get(endpoint.ep));
+        if (endpoint.ep2) promises.push(axios.get(endpoint.ep2));
+
+        // Execute all promises
+
+        const responses = await Promise.all(promises);
+        console.log(promises)
+        const data = responses.map(response => response.data);
+        console.log(`Array Data:`, data)
+        const prediction = determineProfitability(data, formulaType);
         res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]);
     } catch (error) {
         console.error(error);
@@ -261,15 +281,15 @@ async function getPairData(cryptoAsset, quoteCurrency, interval) {
 function determineProfitability(data, formula) {
     switch (formula) {
         case 'formula1':
-            return rsiFormula(data);
+            return rsiFormula(data[0], data[1].value);
         case 'formula2':
-            return macdFormula(data);
+            return macdFormula(data[0]);
         case 'formula3':
-            return bollingerBandsFormula(data);
+            return bollingerBandsFormula(data[0]);
         case 'formula4':
-            return fibonacciRetracementFormula(data);
+            return fibonacciRetracementFormula(data[0]);
         case 'formula5':
-            return voscFormula(data);
+            return voscFormula(data[0]);
         default:
             return 'neutral';
     }
@@ -675,15 +695,66 @@ async function drawBearFlag(candleData) {
     out.on('finish', () => console.log('Bear flag pattern saved as bear_flag_pattern.png'));
 }
 
-function rsiFormula(data) {
-    const rsiValue = data.value;
-    GLOBAL_VARIABLES.rsiValue = rsiValue
-    console.log([rsiValue])
-    if (rsiValue > 70) return { direction: 'fall', value: 1 };
-    else if (rsiValue < 30) return { direction: 'rise', value: 0 };
-    else return { direction: 'neutral', value: '00' };
-
+// Helper function to calculate volatility
+function calculateVolatility(historicalData) {
+    const values = historicalData.map(d => d.value);
+    const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+    const squaredDifferences = values.map(value => Math.pow(value - mean, 2));
+    return Math.sqrt(squaredDifferences.reduce((sum, value) => sum + value, 0) / values.length);
 }
+
+// Helper function to get overbought/oversold duration
+function getExtremeRSIDuration(historicalData, threshold, isOverbought) {
+    let duration = 0;
+    for (let i = historicalData.length - 1; i >= 0; i--) {
+        if ((isOverbought && historicalData[i].value > threshold) ||
+            (!isOverbought && historicalData[i].value < threshold)) {
+            duration++;
+        } else {
+            break;
+        }
+    }
+    return duration;
+}
+
+// Updated RSI formula function
+function rsiFormula(currentRSI, historicalRSI) {
+    const rsiValue = currentRSI.value;
+
+    GLOBAL_VARIABLES.rsiValue = rsiValue;
+    console.log(`Current RSI: ${rsiValue}`);
+    console.log(`Historical RSI:`, historicalRSI);
+
+    // Get previous RSI value
+    const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2].value : rsiValue;
+
+    // Calculate volatility adjustment
+    const volatilityAdjustment = Math.min(calculateVolatility(historicalRSI) * 2, 10); // Cap at 10
+
+    // Adjust thresholds based on volatility
+    const upperThreshold = 70 + volatilityAdjustment;
+    const lowerThreshold = 30 - volatilityAdjustment;
+
+    // Check for extreme RSI durations
+    const overboughtDuration = getExtremeRSIDuration(historicalRSI, upperThreshold, true);
+    const oversoldDuration = getExtremeRSIDuration(historicalRSI, lowerThreshold, false);
+
+    // Determine signal strength and direction
+    if (rsiValue > upperThreshold) {
+        const strength = overboughtDuration > 3 ? 2 : 1;
+        return { direction: 'fall', value: strength, reason: `RSI overbought for ${overboughtDuration} periods` };
+    } else if (rsiValue < lowerThreshold) {
+        const strength = oversoldDuration > 3 ? 2 : 1;
+        return { direction: 'rise', value: strength, reason: `RSI oversold for ${oversoldDuration} periods` };
+    } else if (rsiValue > 50 && rsiValue < previousRSI) {
+        return { direction: 'fall', value: 1, reason: 'RSI declining from bullish territory' };
+    } else if (rsiValue < 50 && rsiValue > previousRSI) {
+        return { direction: 'rise', value: 1, reason: 'RSI rising from bearish territory' };
+    }
+
+    return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone' };
+}
+
 
 function macdFormula(data) {
     const macdLine = parseFloat(data.valueMACD).toFixed(4)
