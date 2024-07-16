@@ -137,9 +137,12 @@ app.post('/check-profitability', async (req, res) => {
                 axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=30`),
                 axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
                 axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=10`),
-                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
-                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
-                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h&short_period=10&long_period=50`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
+                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`),
+                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`),
                 emaCrossoverFormula(cryptoAsset, interval, period)
             ]);
 
@@ -155,13 +158,22 @@ app.post('/check-profitability', async (req, res) => {
                     }
                     case 3:
                         return null
-                    case 4:
-                        return bollingerBandsFormula(response.data);
+                    case 4: if (results[5] && results[5].data) {
+                        return bollingerBandsFormula(response.data, results[1].data.value);
+                    }
                     case 5:
-                        return fibonacciRetracementFormula(response.data);
-                    case 6:
-                        return voscFormula(response.data);
+                        return null
+                    case 6: if (results[7] && results[7].data) {
+                        return fibonacciRetracementFormula(response.data, results[1].data.value);
+                    }
                     case 7:
+                        return null
+                    case 8: if (results[9] && results[9].data) {
+                        return voscFormula(response.data, results[1].data.value);
+                    }
+                    case 9:
+                        return null
+                    case 10:
                         return response;  // EMA result is already a prediction
                     default:
                         return { direction: 'neutral', value: '00' };
@@ -195,13 +207,22 @@ app.post('/check-profitability', async (req, res) => {
             };
             break;
         case 'formula3':  // Using Bollinger Bands
-            endpoint = { ep: `${baseEndpoint}bbands?${commonParams}` };
+            endpoint = {
+                ep: `${baseEndpoint}bbands?${commonParams}&period=${period}`,
+                ep2: `${baseEndpoint}rsi?${commonParams}&period=${period}&results=10`
+            };
             break;
         case 'formula4':  // Using Fibonacci retracement
-            endpoint = { ep: `${baseEndpoint}fibonacciretracement?${commonParams}` };
+            endpoint = {
+                ep: `${baseEndpoint}fibonacciretracement?${commonParams}&period=${period}`,
+                ep2: `${baseEndpoint}rsi?${commonParams}&period=${period}&results=10`
+            };
             break;
         case 'formula5':  // Using VOSC
-            endpoint = { ep: `${baseEndpoint}vosc?${commonParams}&short_period=10&long_period=50` };
+            endpoint = {
+                ep: `${baseEndpoint}vosc?${commonParams}&short_period=10&long_period=50`,
+                ep2: `${baseEndpoint}vosc?${commonParams}&short_period=10&long_period=50&results=10`
+            };
             break;
     }
 
@@ -291,11 +312,11 @@ function determineProfitability(data, formula) {
         case 'formula2':
             return macdFormula(data[0], data[1].value);
         case 'formula3':
-            return bollingerBandsFormula(data[0]);
+            return bollingerBandsFormula(data[0], data[1].value);
         case 'formula4':
-            return fibonacciRetracementFormula(data[0]);
+            return fibonacciRetracementFormula(data[0], data[1].value);
         case 'formula5':
-            return voscFormula(data[0]);
+            return voscFormula(data[0], data[1].value);
         default:
             return 'neutral';
     }
@@ -815,42 +836,194 @@ function macdFormula(data, historicalData) {
     return { direction, value, reason };
 }
 
-function bollingerBandsFormula(data) {
-    // Assuming current price is middle band, though this may need to be fetched separately
-    const price = GLOBAL_VARIABLES.assetPrice;
-    const upperBand = parseFloat(data.valueUpperBand).toFixed(4);
-    const lowerBand = parseFloat(data.valueLowerBand).toFixed(4);
-    GLOBAL_VARIABLES.bollValue = `Upper: ${upperBand} Lower: ${lowerBand}`
-    console.log([price, upperBand, lowerBand])
-    if (price > upperBand) return { direction: 'fall', value: 1 };
-    else if (price < lowerBand) return { direction: 'rise', value: 0 };
-    else return { direction: 'neutral', value: '00' };
-}
+function bollingerBandsFormula(data, historicalData = []) {
+    const price = parseFloat(GLOBAL_VARIABLES.assetPrice);
+    const upperBand = parseFloat(data.valueUpperBand);
+    const lowerBand = parseFloat(data.valueLowerBand);
+    const middleBand = parseFloat(data.valueMiddleBand);
 
-function fibonacciRetracementFormula(data) {
-    const retracementValue = parseFloat(data.value).toFixed(4);
-    const currentTrend = data.trend;
-    GLOBAL_VARIABLES.fibonValue = `Retrace: ${retracementValue} Trend: ${currentTrend}`
-    console.log([retracementValue, currentTrend])
+    GLOBAL_VARIABLES.bollValue = `Upper: ${upperBand.toFixed(4)} Middle: ${middleBand.toFixed(4)} Lower: ${lowerBand.toFixed(4)}`;
+    console.log([price, upperBand, middleBand, lowerBand]);
 
-    if (data.trend === "DOWNTREND") {
-        return retracementValue > 61.8 ? { direction: 'fall', value: 1 } : { direction: 'rise', value: 0 };
-    } else { // Assuming UPTREND if not DOWNTREND
-        return retracementValue < 38.2 ? { direction: 'rise', value: 0 } : { direction: 'fall', value: 1 };
-    }
-}
+    // Calculate Bollinger Bandwidth
+    const bandwidth = (upperBand - lowerBand) / middleBand;
 
-function voscFormula(data) {
-    const voscValue = data.value;
-    GLOBAL_VARIABLES.volumeValue = voscValue
-    console.log([voscValue])
-    if (voscValue > 0) {
-        return { direction: 'rise', value: 0 };
-    } else if (voscValue < 0) {
-        return { direction: 'fall', value: 1 };
+    // Calculate Percentage B
+    const percentB = (price - lowerBand) / (upperBand - lowerBand);
+
+    // Determine trend
+    const trend = historicalData.length > 1 ?
+        (middleBand > historicalData[historicalData.length - 2].valueMiddleBand ? 'up' : 'down') : 'unknown';
+
+    let direction, value, reason;
+
+    if (price > upperBand) {
+        direction = 'fall';
+        value = percentB > 1.05 ? 2 : 1; // Stronger signal if far above upper band
+        reason = `Price above upper band (${percentB.toFixed(2)}), potential reversal`;
+    } else if (price < lowerBand) {
+        direction = 'rise';
+        value = percentB < -0.05 ? 2 : 0; // Stronger signal if far below lower band
+        reason = `Price below lower band (${percentB.toFixed(2)}), potential reversal`;
     } else {
-        return { direction: 'neutral', value: '00' };
+        direction = 'neutral';
+        value = '00';
+        reason = `Price within bands (${percentB.toFixed(2)})`;
+
+        // Check for potential breakout
+        if (bandwidth < 0.1 && trend !== 'unknown') {
+            direction = trend;
+            value = 3;
+            reason += `, low bandwidth (${bandwidth.toFixed(2)}), potential ${trend}ward breakout`;
+        }
     }
+
+    // Add trend context
+    if (trend !== 'unknown') {
+        reason += `, overall trend: ${trend}`;
+    }
+
+    return { direction, value, reason, percentB, bandwidth };
+}
+
+function fibonacciRetracementFormula(data, historicalData = []) {
+    const retracementValue = parseFloat(data.value);
+    const currentTrend = data.trend;
+    const price = parseFloat(GLOBAL_VARIABLES.assetPrice);
+
+    GLOBAL_VARIABLES.fibonValue = `Retrace: ${retracementValue.toFixed(4)} Trend: ${currentTrend}`;
+    console.log([retracementValue, currentTrend, price]);
+
+    // Define Fibonacci levels
+    const levels = [0, 23.6, 38.2, 50, 61.8, 78.6, 100];
+
+    // Find the nearest Fibonacci level
+    const nearestLevel = levels.reduce((prev, curr) =>
+        Math.abs(curr - retracementValue) < Math.abs(prev - retracementValue) ? curr : prev
+    );
+
+    let direction, value, reason;
+
+    // Determine trend strength based on historical data
+    const trendStrength = determineTrendStrength(historicalData);
+
+    if (currentTrend === "DOWNTREND") {
+        if (retracementValue > 61.8) {
+            direction = 'fall';
+            value = retracementValue > 78.6 ? 2 : 2;
+            reason = `Strong retracement (${nearestLevel}%) in downtrend, potential continuation`;
+        } else {
+            direction = 'rise';
+            value = retracementValue < 38.2 ? 0 : 0;
+            reason = `Weak retracement (${nearestLevel}%) in downtrend, potential reversal`;
+        }
+    } else { // UPTREND
+        if (retracementValue < 38.2) {
+            direction = 'rise';
+            value = retracementValue < 23.6 ? -1 : -1;
+            reason = `Weak retracement (${nearestLevel}%) in uptrend, potential continuation`;
+        } else {
+            direction = 'fall';
+            value = retracementValue > 61.8 ? 1 : 1;
+            reason = `Strong retracement (${nearestLevel}%) in uptrend, potential reversal`;
+        }
+    }
+
+    // Adjust based on trend strength
+    if (trendStrength === 'strong' && direction === currentTrend.toLowerCase()) {
+        value = Math.min(value + 1, 2);
+        reason += ', strong overall trend supports this direction';
+    } else if (trendStrength === 'weak' && direction !== currentTrend.toLowerCase()) {
+        value = Math.min(value + 1, 2);
+        reason += ', weak overall trend supports potential reversal';
+    }
+
+    return { direction, value, reason, retracementLevel: nearestLevel, trendStrength };
+}
+
+function determineTrendStrength(historicalData) {
+    if (!historicalData || historicalData.length < 5) return 'unknown';
+
+    const recentValues = historicalData.slice(-5).map(d => d.value);
+    const avgRetracement = recentValues.reduce((sum, val) => sum + val, 0) / recentValues.length;
+
+    if (avgRetracement < 38.2) return 'strong';
+    if (avgRetracement > 61.8) return 'weak';
+    return 'moderate';
+}
+
+function voscFormula(data, historicalData = []) {
+    const voscValue = parseFloat(data.value);
+    GLOBAL_VARIABLES.volumeValue = voscValue.toFixed(2);
+    console.log('VOSC Value:', voscValue);
+
+    // Define thresholds for strong signals
+    const strongSignalThreshold = 20; // Adjust based on your asset's typical VOSC range
+
+    // Calculate VOSC trend
+    const voscTrend = calculateVOSCTrend(historicalData);
+
+    let direction, value, reason;
+
+    if (voscValue > 0) {
+        direction = 'rise';
+        value = voscValue > strongSignalThreshold ? 0 : 0;
+        reason = `Positive VOSC (${voscValue.toFixed(2)}), indicating higher short-term volume`;
+    } else if (voscValue < 0) {
+        direction = 'fall';
+        value = voscValue < -strongSignalThreshold ? 1 : 1;
+        reason = `Negative VOSC (${voscValue.toFixed(2)}), indicating higher long-term volume`;
+    } else {
+        direction = 'neutral';
+        value = '00';
+        reason = 'VOSC at zero, indicating balanced short and long-term volumes';
+    }
+
+    // Adjust based on VOSC trend
+    if (voscTrend === 'rising' && direction === 'rise') {
+        value = -1;
+        reason += ', with rising trend strengthening the signal';
+    } else if (voscTrend === 'falling' && direction === 'fall') {
+        value = 2;
+        reason += ', with falling trend strengthening the signal';
+    } else if (voscTrend !== 'neutral') {
+        reason += `, but ${voscTrend} trend suggests caution`;
+    }
+
+    // Check for potential divergence with price
+    const priceTrend = calculatePriceTrend(historicalData);
+    if (priceTrend && priceTrend !== direction) {
+        reason += '. Potential divergence with price trend detected';
+    }
+
+    return { direction, value, reason, voscValue, voscTrend };
+}
+
+function calculateVOSCTrend(historicalData, periods = 5) {
+    if (!historicalData || historicalData.length < periods) return 'unknown';
+
+    const recentValues = historicalData.slice(-periods).map(d => d.value);
+    const firstHalf = recentValues.slice(0, Math.floor(periods / 2));
+    const secondHalf = recentValues.slice(-Math.floor(periods / 2));
+
+    const firstAvg = firstHalf.reduce((sum, val) => sum + val, 0) / firstHalf.length;
+    const secondAvg = secondHalf.reduce((sum, val) => sum + val, 0) / secondHalf.length;
+
+    if (secondAvg > firstAvg) return 'rising';
+    if (secondAvg < firstAvg) return 'falling';
+    return 'neutral';
+}
+
+function calculatePriceTrend(historicalData, periods = 5) {
+    if (!historicalData || historicalData.length < periods || !historicalData[0].price) return null;
+
+    const recentPrices = historicalData.slice(-periods).map(d => d.price);
+    const firstPrice = recentPrices[0];
+    const lastPrice = recentPrices[recentPrices.length - 1];
+
+    if (lastPrice > firstPrice) return 'rise';
+    if (lastPrice < firstPrice) return 'fall';
+    return 'neutral';
 }
 
 async function emaCrossoverFormula(cryptoAsset, interval, period) {
