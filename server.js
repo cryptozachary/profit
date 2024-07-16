@@ -747,11 +747,11 @@ function rsiFormula(currentRSI, historicalRSI) {
 
     // Determine signal strength and direction
     if (rsiValue > upperThreshold) {
-        const strength = overboughtDuration > 3 ? 1 : 1;
+        const strength = overboughtDuration > 3 ? 2 : 2;
         console.log(`Strength:`, strength)
         return { direction: 'fall', value: strength, reason: `RSI overbought for ${overboughtDuration} periods` };
     } else if (rsiValue < lowerThreshold) {
-        const strength = oversoldDuration > 3 ? 0 : 0;
+        const strength = oversoldDuration > 3 ? -1 : -1;
         console.log(`Strength:`, strength)
         return { direction: 'rise', value: strength, reason: `RSI oversold for ${oversoldDuration} periods` };
     } else if (rsiValue > 50 && rsiValue < previousRSI) {
@@ -789,7 +789,7 @@ function macdFormula(data, historicalData) {
         reason = `MACD (${macdTrend}) above Signal (${signalTrend})`;
         if (macdLine > 0 && signalLine > 0) {
             reason += ' above zero line - strong bullish';
-            value = 2;
+            value = -1;
         }
     } else if (macdLine < signalLine) {
         direction = 'fall';
@@ -901,6 +901,8 @@ function evaluateAssetDirection(predictions) {
     for (let prediction of predictions) {
         if (prediction.value === 0) riseCount++;
         else if (prediction.value === 1) fallCount++;
+        else if (prediction.value === 2) fallCount = fallCount + 2;
+        else if (prediction.value === -1) riseCount = riseCount + 2;
         else neutralCount++; // prediction.value === '00'
     }
 
