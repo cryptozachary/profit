@@ -11,11 +11,11 @@ document.addEventListener('DOMContentLoaded', initializeApplication);
 function initializeApplication() {
     initializeUI();
     setupEventListeners();
-    if (pairs.length > 0) {
-        updateUIWithPairData(pairs[0]);
-    } else {
-        console.warn('No pairs available for initial update');
-    }
+    // if (pairs.length > 0) {
+    //     updateUIWithPairData(pairs[0]);
+    // } else {
+    //     console.warn('No pairs available for initial update');
+    // }
 }
 
 function initializeUI() {

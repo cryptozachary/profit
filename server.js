@@ -133,9 +133,10 @@ app.post('/check-profitability', async (req, res) => {
         try {
             const results = await Promise.all([
 
-                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
-                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=30`),
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=30`),
                 axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
+                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=10`),
                 axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
                 axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
                 axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1h&short_period=10&long_period=50`),
@@ -149,15 +150,18 @@ app.post('/check-profitability', async (req, res) => {
                     }
                     case 1:
                         return null
-                    case 2:
-                        return macdFormula(response.data);
+                    case 2: if (results[3] && results[3].data) {
+                        return macdFormula(response.data, results[1].data.value);
+                    }
                     case 3:
-                        return bollingerBandsFormula(response.data);
+                        return null
                     case 4:
-                        return fibonacciRetracementFormula(response.data);
+                        return bollingerBandsFormula(response.data);
                     case 5:
-                        return voscFormula(response.data);
+                        return fibonacciRetracementFormula(response.data);
                     case 6:
+                        return voscFormula(response.data);
+                    case 7:
                         return response;  // EMA result is already a prediction
                     default:
                         return { direction: 'neutral', value: '00' };
@@ -176,7 +180,7 @@ app.post('/check-profitability', async (req, res) => {
     const baseEndpoint = `https://api.taapi.io/`;
     const commonParams = `secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}`;
 
-
+    // ep is current and ep2 is historical data
     switch (formulaType) {
         case 'formula1':  // Using RSI
             endpoint = {
@@ -185,7 +189,10 @@ app.post('/check-profitability', async (req, res) => {
             };
             break;
         case 'formula2':  // Using MACD
-            endpoint = { ep: `${baseEndpoint}macd?${commonParams}` };
+            endpoint = {
+                ep: `${baseEndpoint}macd?${commonParams}`,
+                ep2: `${baseEndpoint}rsi?${commonParams}&results=10`
+            };
             break;
         case 'formula3':  // Using Bollinger Bands
             endpoint = { ep: `${baseEndpoint}bbands?${commonParams}` };
@@ -282,7 +289,7 @@ function determineProfitability(data, formula) {
         case 'formula1':
             return rsiFormula(data[0], data[1].value);
         case 'formula2':
-            return macdFormula(data[0]);
+            return macdFormula(data[0], data[1].value);
         case 'formula3':
             return bollingerBandsFormula(data[0]);
         case 'formula4':
@@ -756,15 +763,56 @@ function rsiFormula(currentRSI, historicalRSI) {
     return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone' };
 }
 
-function macdFormula(data) {
-    const macdLine = parseFloat(data.valueMACD).toFixed(4)
-    const signalLine = parseFloat(data.valueMACDSignal).toFixed(4)
-    console.log('data:', data)
-    GLOBAL_VARIABLES.MacdValue = `MaccdLine: ${macdLine} SignalLine: ${signalLine}`
-    console.log([macdLine, signalLine])
-    if (macdLine > signalLine) return { direction: 'rise', value: 0 };
-    else if (macdLine < signalLine) return { direction: 'fall', value: 1 };
-    else return { direction: 'neutral', value: '00' };
+function macdFormula(data, historicalData) {
+    const macdLine = parseFloat(data.valueMACD);
+    const signalLine = parseFloat(data.valueMACDSignal);
+    const histogram = macdLine - signalLine;
+
+    console.log('MACD data:', { macdLine, signalLine, histogram });
+    console.log(`MACD Historical:`, historicalData)
+    GLOBAL_VARIABLES.MacdValue = `MACD: ${macdLine.toFixed(4)} Signal: ${signalLine.toFixed(4)} Histogram: ${histogram.toFixed(4)}`;
+
+    // Analyze trend
+    const previousMACD = historicalData[historicalData.length - 2].valueMACD;
+    const previousSignal = historicalData[historicalData.length - 2].valueMACDSignal;
+    const macdTrend = macdLine > previousMACD ? 'rising' : 'falling';
+    const signalTrend = signalLine > previousSignal ? 'rising' : 'falling';
+
+    // Determine signal strength
+    const signalStrength = Math.abs(histogram) / ((macdLine + signalLine) / 2);
+
+    let direction, value, reason;
+
+    if (macdLine > signalLine) {
+        direction = 'rise';
+        value = signalStrength > 0.1 ? 0 : 0; // Stronger signal if difference is significant
+        reason = `MACD (${macdTrend}) above Signal (${signalTrend})`;
+        if (macdLine > 0 && signalLine > 0) {
+            reason += ' above zero line - strong bullish';
+            value = 2;
+        }
+    } else if (macdLine < signalLine) {
+        direction = 'fall';
+        value = signalStrength > 0.1 ? 1 : 1;
+        reason = `MACD (${macdTrend}) below Signal (${signalTrend})`;
+        if (macdLine < 0 && signalLine < 0) {
+            reason += ' below zero line - strong bearish';
+            value = 2;
+        }
+    } else {
+        direction = 'neutral';
+        value = '00';
+        reason = 'MACD and Signal lines are equal';
+    }
+
+    // Check for potential divergence
+    const priceTrend = historicalData[historicalData.length - 1].close > historicalData[0].close ? 'rising' : 'falling';
+    if (priceTrend !== macdTrend) {
+        reason += ' - Potential divergence detected';
+        value = Math.min(value + 1, 2); // Increase signal strength, but cap at 2
+    }
+
+    return { direction, value, reason };
 }
 
 function bollingerBandsFormula(data) {
