@@ -31,14 +31,14 @@
     <div class="container">
         <select id="chooseAsset">
             <% for (let symbol of symbols) { %>
-                <option value="<%= symbol %>">
+                <option value="<%= symbol %>" <%=symbol=="BTC/USDT" ? 'selected' : '' %>>
                     <%= symbol %>
                 </option>
                 <% } %>
         </select>
         <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)" value="btc" hidden>
         <select id="formula">
-            <option value="all">All Strategies</option>
+            <option value="all" style="font-weight: bold;">All Strategies</option>
             <option value="formula1">RSI</option>
             <option value="formula2">MACD</option>
             <option value="formula3">Bollinger Bands</option>
@@ -69,7 +69,7 @@
             <button id="toggleAutoScan" class="toggle-button">Start Auto Scan</button>
             <select id="scanInterval">
                 <option value="5000">5 seconds</option>
-                <option value="10000">10 seconds</option>
+                <option value="10000" selected>10 seconds</option>
                 <option value="30000">30 seconds</option>
             </select>
         </div>

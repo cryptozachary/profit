@@ -149,7 +149,6 @@ app.post('/check-profitability', async (req, res) => {
                     }
                     case 1:
                         return null
-                        break;
                     case 2:
                         return macdFormula(response.data);
                     case 3:
@@ -591,10 +590,10 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
 
     try {
         // Create logs directory if it doesn't exist
-        await fs.mkdir(logDir, { recursive: true });
+        fs.mkdir(logDir, { recursive: true });
 
         // Append to the log file
-        await fs.appendFile(logFile, logEntry);
+        fs.appendFile(logFile, logEntry);
         console.log(`Flag pattern logged for ${pair}`);
     } catch (error) {
         console.error('Error logging flag pattern:', error);
@@ -741,20 +740,21 @@ function rsiFormula(currentRSI, historicalRSI) {
 
     // Determine signal strength and direction
     if (rsiValue > upperThreshold) {
-        const strength = overboughtDuration > 3 ? 2 : 1;
+        const strength = overboughtDuration > 3 ? 1 : 1;
+        console.log(`Strength:`, strength)
         return { direction: 'fall', value: strength, reason: `RSI overbought for ${overboughtDuration} periods` };
     } else if (rsiValue < lowerThreshold) {
-        const strength = oversoldDuration > 3 ? 2 : 1;
+        const strength = oversoldDuration > 3 ? 0 : 0;
+        console.log(`Strength:`, strength)
         return { direction: 'rise', value: strength, reason: `RSI oversold for ${oversoldDuration} periods` };
     } else if (rsiValue > 50 && rsiValue < previousRSI) {
         return { direction: 'fall', value: 1, reason: 'RSI declining from bullish territory' };
     } else if (rsiValue < 50 && rsiValue > previousRSI) {
-        return { direction: 'rise', value: 1, reason: 'RSI rising from bearish territory' };
+        return { direction: 'rise', value: 0, reason: 'RSI rising from bearish territory' };
     }
 
     return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone' };
 }
-
 
 function macdFormula(data) {
     const macdLine = parseFloat(data.valueMACD).toFixed(4)
