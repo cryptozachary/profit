@@ -51,7 +51,7 @@ app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
 
-    if (formulaType !== "formula7") {
+    if (formulaType !== "formula7" && formulaType !== "formula8") {
         clearObject(GLOBAL_VARIABLES);
     }
 
@@ -181,7 +181,7 @@ app.post('/check-profitability', async (req, res) => {
             }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
 
             const overallPrediction = evaluateAssetDirection(predictions);
-            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES]);
+            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }]);
 
         } catch (error) {
             console.error(error);
@@ -809,7 +809,7 @@ function macdFormula(data, historicalData) {
         value = signalStrength > 0.1 ? 0 : 0; // Stronger signal if difference is significant
         reason = `MACD (${macdTrend}) above Signal (${signalTrend})`;
         if (macdLine > 0 && signalLine > 0) {
-            reason += ' above zero line - strong bullish';
+            reason += 'MACD: above zero line - strong bullish';
             value = -1;
         }
     } else if (macdLine < signalLine) {
@@ -817,7 +817,7 @@ function macdFormula(data, historicalData) {
         value = signalStrength > 0.1 ? 1 : 1;
         reason = `MACD (${macdTrend}) below Signal (${signalTrend})`;
         if (macdLine < 0 && signalLine < 0) {
-            reason += ' below zero line - strong bearish';
+            reason += 'MACD: below zero line - strong bearish';
             value = 2;
         }
     } else {
@@ -860,11 +860,11 @@ function bollingerBandsFormula(data, historicalData = []) {
     if (price > upperBand) {
         direction = 'fall';
         value = percentB > 1.05 ? 2 : 1; // Stronger signal if far above upper band
-        reason = `Price above upper band (${percentB.toFixed(2)}), potential reversal`;
+        reason = `Price above upper band (${percentB.toFixed(2)}), potential reversal downward`;
     } else if (price < lowerBand) {
         direction = 'rise';
         value = percentB < -0.05 ? 2 : 0; // Stronger signal if far below lower band
-        reason = `Price below lower band (${percentB.toFixed(2)}), potential reversal`;
+        reason = `Price below lower band (${percentB.toFixed(2)}), potential reversal upward`;
     } else {
         direction = 'neutral';
         value = '00';
@@ -911,21 +911,21 @@ function fibonacciRetracementFormula(data, historicalData = []) {
         if (retracementValue > 61.8) {
             direction = 'fall';
             value = retracementValue > 78.6 ? 2 : 2;
-            reason = `Strong retracement (${nearestLevel}%) in downtrend, potential continuation`;
+            reason = `Strong FIB retracement (${nearestLevel}%) in downtrend, potential continuation`;
         } else {
             direction = 'rise';
             value = retracementValue < 38.2 ? 0 : 0;
-            reason = `Weak retracement (${nearestLevel}%) in downtrend, potential reversal`;
+            reason = `Weak FIB retracement (${nearestLevel}%) in downtrend, potential reversal`;
         }
     } else { // UPTREND
         if (retracementValue < 38.2) {
             direction = 'rise';
             value = retracementValue < 23.6 ? -1 : -1;
-            reason = `Weak retracement (${nearestLevel}%) in uptrend, potential continuation`;
+            reason = `Weak FIB retracement (${nearestLevel}%) in uptrend, potential continuation`;
         } else {
             direction = 'fall';
             value = retracementValue > 61.8 ? 1 : 1;
-            reason = `Strong retracement (${nearestLevel}%) in uptrend, potential reversal`;
+            reason = `Strong FIB retracement (${nearestLevel}%) in uptrend, potential reversal`;
         }
     }
 

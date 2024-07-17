@@ -185,8 +185,9 @@ async function processResponse(data) {
     console.log("Show Data:", data);
     if (Array.isArray(data) && data.length >= 2) {
         const prediction = data[0].isProfitable;
+        const theReasons = (data[2] !== null && data[2] !== undefined) ? data[2].reasons : null
         updateDisplays(data[1]);
-        updateResultMessage(prediction, data[0]);
+        updateResultMessage(prediction, data[0], theReasons);
     } else {
         throw new Error('Unexpected server response format');
     }
@@ -203,24 +204,27 @@ function updateDisplays(data) {
     updateElementText('macdValue', data.MacdValue);
 }
 
-function updateResultMessage(prediction, data) {
+function updateResultMessage(prediction, data, reason) {
     console.log(prediction);
     let resultText;
     switch (prediction) {
         case 'rise':
-            resultText = "The asset is likely to increase in price!";
+            resultText = `The asset is likely to increase in price!`;
+            for (let i = 0; i < reason.length - 1; i++) {
+                resultText += ` ${reason[i].reason}. `;
+            };
             break;
         case 'fall':
             resultText = "The asset is likely to decrease in price!";
             break;
         case false:
-            resultText = `${data.theError}`;
+            resultText = `${data.theError} `;
             break;
         case 'neutral':
             resultText = "The asset's price movement is uncertain.";
             break;
         case true:
-            resultText = `Bearflag pattern exist with price target of ${data.flagPrice} and flag pole height of ${data.flagHeight}`;
+            resultText = `Bearflag pattern exist with price target of ${data.flagPrice} and flag pole height of ${data.flagHeight} `;
             break;
         default:
             resultText = "The asset's price movement is uncertain.";
