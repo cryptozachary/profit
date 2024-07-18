@@ -38,17 +38,24 @@ app.set('views', path.join(__dirname, '/frontend/views'));
 async function getSymbols(req, res, next) {
     try {
         const response = await axios.get(`https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=binance`);
-        req.symbols = response.data; // Assign the retrieved data to req.symbols
+
+        // Filter symbols to include only those ending with '/USDT' or '/USDC'
+        const filteredSymbols = response.data.filter(symbol =>
+            symbol.endsWith('/USDT') || symbol.endsWith('/USDC')
+        );
+
+        req.symbols = filteredSymbols; // Assign the filtered data to req.symbols
         next(); // Call the next middleware or route handler
     } catch (error) {
         console.error(error);
-        // You might want to handle the error and send an appropriate response here
         res.status(500).send('Failed to retrieve symbols data.');
     }
 }
 
+
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
+
 
 
     if (formulaType !== "formula7" && formulaType !== "formula8") {
@@ -125,9 +132,8 @@ app.post('/check-profitability', async (req, res) => {
             console.error(error);
             return res.status(500).send('Failed to retrieve bull flag pattern data.');
         }
+
     }
-
-
 
     if (formulaType === 'all') {  // Check for all formulas
         try {
@@ -181,7 +187,41 @@ app.post('/check-profitability', async (req, res) => {
             }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
 
             const overallPrediction = evaluateAssetDirection(predictions);
-            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }]);
+
+            const bullFlagPattern = await getBullFlagSignal(
+                TAAPI_SECRET,
+                'binance',
+                `${cryptoAsset}/${pair}`,
+                `${interval}`,
+                `${period}`
+            );
+
+            const bearFlagPattern = await getBearFlagSignal(
+                TAAPI_SECRET,
+                'binance',
+                `${cryptoAsset}/${pair}`,
+                `${interval}`,
+                `${period}`
+            );
+
+            const patternData = {
+                flagPattern: bullFlagPattern.patternFound ? 'bull' :
+                    (bearFlagPattern.patternFound ? 'bear' : null),
+                flagpoleHeight: bullFlagPattern.patternFound ? bullFlagPattern.flagpoleHeight :
+                    (bearFlagPattern.patternFound ? bearFlagPattern.flagpoleHeight : null)
+            };
+
+            const technicalData = {
+                rsi: predictions[0],
+                macd: predictions[1],
+                bollingerBands: predictions[2],
+                fibonacciRetracement: predictions[3],
+                vosc: predictions[4]
+            };
+
+            const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData)
+
+            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
 
         } catch (error) {
             console.error(error);
@@ -239,7 +279,7 @@ app.post('/check-profitability', async (req, res) => {
         const data = responses.map(response => response.data);
         console.log(`Array Data:`, data)
         const prediction = determineProfitability(data, formulaType);
-        res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]);
+        res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES, TECHINCAL_DATA]);
     } catch (error) {
         console.error(error);
         res.json({ Message: 'Nope' })
@@ -306,20 +346,22 @@ async function getPairData(cryptoAsset, quoteCurrency, interval) {
 }
 
 function determineProfitability(data, formula) {
+
     switch (formula) {
-        case 'formula1':
+        case 'formula1': TECHINCAL_DATA.rsi = rsiFormula(data[0], data[1].value);
             return rsiFormula(data[0], data[1].value);
-        case 'formula2':
+        case 'formula2': TECHINCAL_DATA.macd = macdFormula(data[0], data[1].value);
             return macdFormula(data[0], data[1].value);
-        case 'formula3':
+        case 'formula3': TECHINCAL_DATA.bollingerBands = bollingerBandsFormula(data[0], data[1].value);
             return bollingerBandsFormula(data[0], data[1].value);
-        case 'formula4':
+        case 'formula4': TECHINCAL_DATA.fibonacciRetracement = fibonacciRetracementFormula(data[0], data[1].value);
             return fibonacciRetracementFormula(data[0], data[1].value);
-        case 'formula5':
+        case 'formula5': TECHINCAL_DATA.vosc = voscFormula(data[0], data[1].value);
             return voscFormula(data[0], data[1].value);
         default:
             return 'neutral';
     }
+
 }
 
 async function getBearFlagSignal(api_secret, exchange, symbol, interval, period = 14, options = {}) {
@@ -1084,6 +1126,83 @@ function evaluateAssetDirection(predictions) {
     if (riseCount > fallCount && riseCount > neutralCount) return "rise";
     if (fallCount > riseCount && fallCount > neutralCount) return "fall";
     return "neutral"; // Default to 'neutral' if unable to determine
+}
+
+function estimateTargetPrice(currentPrice, technicalData, patternData) {
+    const { rsi, macd, bollingerBands, fibonacciRetracement, vosc } = technicalData;
+    const { flagPattern, flagpoleHeight } = patternData;
+
+    let priceChangePercentage = 0;
+    let confidenceScore = 0;
+
+    // RSI contribution
+    if (rsi.value < 30) {
+        priceChangePercentage += 2; // Expect 2% increase
+        confidenceScore += 1;
+    } else if (rsi.value > 70) {
+        priceChangePercentage -= 2; // Expect 2% decrease
+        confidenceScore += 1;
+    }
+
+    // MACD contribution
+    if (macd.direction === 'rise') {
+        priceChangePercentage += 1.5;
+        confidenceScore += 1;
+    } else if (macd.direction === 'fall') {
+        priceChangePercentage -= 1.5;
+        confidenceScore += 1;
+    }
+
+    // Bollinger Bands contribution
+    const bbPercentage = (currentPrice - bollingerBands.lowerBand) / (bollingerBands.upperBand - bollingerBands.lowerBand);
+    if (bbPercentage < 0.2) {
+        priceChangePercentage += 2;
+        confidenceScore += 1;
+    } else if (bbPercentage > 0.8) {
+        priceChangePercentage -= 2;
+        confidenceScore += 1;
+    }
+
+    // Fibonacci Retracement contribution
+    if (fibonacciRetracement.direction === 'rise') {
+        priceChangePercentage += 1;
+        confidenceScore += 0.5;
+    } else if (fibonacciRetracement.direction === 'fall') {
+        priceChangePercentage -= 1;
+        confidenceScore += 0.5;
+    }
+
+    // VOSC contribution
+    if (vosc.direction === 'rise') {
+        priceChangePercentage += 1;
+        confidenceScore += 0.5;
+    } else if (vosc.direction === 'fall') {
+        priceChangePercentage -= 1;
+        confidenceScore += 0.5;
+    }
+
+    // Flag pattern contribution
+    if (flagPattern === 'bull' && flagpoleHeight) {
+        priceChangePercentage += (flagpoleHeight / currentPrice) * 100;
+        confidenceScore += 2;
+    } else if (flagPattern === 'bear' && flagpoleHeight) {
+        priceChangePercentage -= (flagpoleHeight / currentPrice) * 100;
+        confidenceScore += 2;
+    }
+
+    // Calculate target price
+    const targetPrice = currentPrice * (1 + priceChangePercentage / 100);
+
+    // Normalize confidence score to a 0-100 scale
+    const maxConfidenceScore = 7; // Maximum possible confidence score
+    const normalizedConfidence = (confidenceScore / maxConfidenceScore) * 100;
+
+    return {
+        currentPrice,
+        targetPrice,
+        priceChangePercentage,
+        confidence: normalizedConfidence
+    };
 }
 
 const PORT = process.env.PORT || 3000;

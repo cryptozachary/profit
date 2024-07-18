@@ -23,6 +23,10 @@
             <p><strong>EMA:</strong> <span id="emaValue"></span><span id="emaReason"></span></p>
             <p><strong>Bollinger Bands:</strong> <span id="bollingerValue"></span><span id="bolReason"></span></p>
             <p><strong>MACD:</strong> <span id="macdValue"></span><span id="macReason"></span></p>
+            <p><strong>Target Price:</strong> <span id="targetValue"></span><span id="targetReason"></span></p>
+            <p><strong>Price Change:</strong> <span id="percentageValue"></span><span id="percentageReason"></span>
+            <p><strong>Confidence:</strong> <span id="confidenceValue"></span><span id="confidenceReason"></span></p>
+            </p>
         </div>
     </div>
     <div>
@@ -54,7 +58,7 @@
                 <option value="5m">5 minutes</option>
                 <option value="15m">15 minutes</option>
                 <option value="30m">30 minutes</option>
-                <option value="1h">1hr</option>
+                <option value="1h" selected>1hr</option>
                 <option value="2h">2hr</option>
                 <option value="4h">4hr</option>
                 <option value="12h">12hr</option>
@@ -63,7 +67,7 @@
             </select>
             <input class="params" id="period" type="numer" min="1" max="100" value="14"
                 placeholder="Period (default: 14)" disabled>
-            <input id="checkbox" type="checkbox" name="myCheckbox" value="checkboxValue">
+            <input id="checkbox" type="checkbox" name="myCheckbox" value="checkboxValue" checked>
         </div>
         <div class="scan-controls">
             <button id="toggleAutoScan" class="toggle-button">Start Auto Scan</button>

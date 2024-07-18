@@ -153,9 +153,9 @@ async function checkProfitability(data) {
         displayError(error.message);
     }
 
-    if (data && data.bullFlag) {
-        updateElementText('profitable', 'The asset is likely to ' + (data.bullFlag.patternFound ? 'increase' : 'decrease') + ' in price!');
-    }
+    // if (data && data.bullFlag) {
+    //     updateElementText('profitable', 'The asset is likely to ' + (data.bullFlag.patternFound ? 'increase' : 'decrease') + ' in price!');
+    // }
 }
 
 function buildRequestBody(asset2, formula, pair) {
@@ -186,14 +186,14 @@ async function processResponse(data) {
     if (Array.isArray(data) && data.length >= 2) {
         const prediction = data[0].isProfitable;
         const theReasons = (data[2] !== null && data[2] !== undefined) ? data[2].reasons : null
-        updateDisplays(data[1]);
+        updateDisplays(data[1], data[3]);
         updateResultMessage(prediction, data[0], theReasons);
     } else {
         throw new Error('Unexpected server response format');
     }
 }
 
-function updateDisplays(data) {
+function updateDisplays(data, data2) {
     updateElementText('assetName', data.name.toUpperCase());
     updateElementText('assetPriceDisplay', data.assetPrice);
     updateElementText('rsiValue', data.rsiValue);
@@ -202,6 +202,9 @@ function updateDisplays(data) {
     updateElementText('emaValue', data.emaValue);
     updateElementText('bollingerValue', data.bollValue);
     updateElementText('macdValue', data.MacdValue);
+    updateElementText('targetValue', data2.targets.targetPrice);
+    updateElementText('percentageValue', data2.targets.priceChangePercentage);
+    updateElementText('confidenceValue', data2.targets.confidence);
 }
 
 function updateResultMessage(prediction, data, reason) {
@@ -224,7 +227,7 @@ function updateResultMessage(prediction, data, reason) {
             resultText = "The asset's price movement is uncertain.";
             break;
         case true:
-            resultText = `Bearflag pattern exist with price target of ${data.flagPrice} and flag pole height of ${data.flagHeight} `;
+            resultText = `Flag pattern exist with price target of ${data.flagPrice} and flag pole height of ${data.flagHeight} `;
             break;
         default:
             resultText = "The asset's price movement is uncertain.";
