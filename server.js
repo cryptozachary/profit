@@ -153,6 +153,7 @@ app.post('/check-profitability', async (req, res) => {
             ]);
 
             const predictions = results.map((response, index) => {
+
                 switch (index) {
                     case 0: if (results[1] && results[1].data) {
                         return rsiFormula(response.data, results[1].data.value);
@@ -184,7 +185,7 @@ app.post('/check-profitability', async (req, res) => {
                 }
             }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
 
-            const overallPrediction = evaluateAssetDirection(predictions);
+            //const overallPrediction = evaluateAssetDirection(predictions);
 
             const bullFlagPattern = await getBullFlagSignal(
                 TAAPI_SECRET,
@@ -220,7 +221,7 @@ app.post('/check-profitability', async (req, res) => {
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData)
 
-            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
+            return res.json([{ isProfitable: targets.predictedDirection }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
 
         } catch (error) {
             console.error(error);
@@ -366,7 +367,7 @@ function determineProfitability(data, formula) {
 
 async function getBearFlagSignal(api_secret, exchange, symbol, interval, period = 14, options = {}) {
 
-    console.log(`Show BearFlagData: ${period}, ${interval}`)
+    //console.log(`Show BearFlagData: ${period}, ${interval}`)
     // Constants and configurable parameters
     const {
         minFlagDuration = 5,
@@ -809,8 +810,8 @@ function rsiFormula(currentRSI, historicalRSI) {
     const rsiValue = currentRSI.value;
 
     GLOBAL_VARIABLES.rsiValue = rsiValue;
-    console.log(`Current RSI: ${rsiValue}`);
-    console.log(`Historical RSI:`, historicalRSI);
+    // console.log(`Current RSI: ${rsiValue}`);
+    //console.log(`Historical RSI:`, historicalRSI);
 
     // Get previous RSI value
     const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2].value : rsiValue;
@@ -849,8 +850,8 @@ function macdFormula(data, historicalData) {
     const signalLine = parseFloat(data.valueMACDSignal);
     const histogram = macdLine - signalLine;
 
-    console.log('MACD data:', { macdLine, signalLine, histogram });
-    console.log(`MACD Historical:`, historicalData)
+    //console.log('MACD data:', { macdLine, signalLine, histogram });
+    //console.log(`MACD Historical:`, historicalData)
     GLOBAL_VARIABLES.MacdValue = `MACD: ${macdLine.toFixed(4)} Signal: ${signalLine.toFixed(4)} Histogram: ${histogram.toFixed(4)}`;
 
     // Analyze trend
@@ -903,7 +904,7 @@ function bollingerBandsFormula(data, historicalData = []) {
     const middleBand = parseFloat(data.valueMiddleBand);
 
     GLOBAL_VARIABLES.bollValue = `Upper: ${upperBand.toFixed(4)} Middle: ${middleBand.toFixed(4)} Lower: ${lowerBand.toFixed(4)}`;
-    console.log([price, upperBand, middleBand, lowerBand]);
+    // console.log([price, upperBand, middleBand, lowerBand]);
 
     // Calculate Bollinger Bandwidth
     const bandwidth = (upperBand - lowerBand) / middleBand;
@@ -955,7 +956,7 @@ function fibonacciRetracementFormula(data, historicalData = []) {
     const price = parseFloat(GLOBAL_VARIABLES.assetPrice);
 
     GLOBAL_VARIABLES.fibonValue = `Retrace: ${retracementValue.toFixed(4)} Trend: ${currentTrend}`;
-    console.log([retracementValue, currentTrend, price]);
+    // console.log([retracementValue, currentTrend, price]);
 
     // Define Fibonacci levels
     const levels = [0, 23.6, 38.2, 50, 61.8, 78.6, 100];
@@ -1018,7 +1019,7 @@ function determineTrendStrength(historicalData) {
 function voscFormula(data, historicalData = []) {
     const voscValue = parseFloat(data.value);
     GLOBAL_VARIABLES.volumeValue = voscValue.toFixed(2);
-    console.log('VOSC Value:', voscValue);
+    // console.log('VOSC Value:', voscValue);
 
     // Define thresholds for strong signals
     const strongSignalThreshold = 20; // Adjust based on your asset's typical VOSC range
@@ -1117,7 +1118,7 @@ async function emaCrossoverFormula(cryptoAsset, interval, period) {
 
         // Update the GLOBAL_VARIABLES.emaValue with the rounded values
         GLOBAL_VARIABLES.emaValue = `CShort: ${roundedCurrentShortEma} CLong: ${roundedCurrentLongEma} PShort: ${roundedPreviousShortEma} Plong: ${roundedPreviousLongEma}`;
-        console.log([currentShortEma, currentLongEma, previousShortEma, previousLongEma])
+        // console.log([currentShortEma, currentLongEma, previousShortEma, previousLongEma])
 
         if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return { direction: 'rise', value: 0 };
         if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return { direction: 'fall', value: 1 };
@@ -1135,7 +1136,6 @@ function evaluateAssetDirection(predictions) {
     let neutralCount = 0;
 
     for (let prediction of predictions) {
-        console.log(`Prediction:`, prediction)
         if (prediction.value === 0) riseCount++;
         else if (prediction.value === 1) fallCount++;
         else if (prediction.value === 2) fallCount = fallCount + 2;
