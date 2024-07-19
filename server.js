@@ -181,8 +181,6 @@ app.post('/check-profitability', async (req, res) => {
                         return null
                     case 10:
                         return response;  // EMA result is already a prediction
-                    default:
-                        return { direction: 'neutral', value: '00' };
                 }
             }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
 
@@ -216,7 +214,8 @@ app.post('/check-profitability', async (req, res) => {
                 macd: predictions[1],
                 bollingerBands: predictions[2],
                 fibonacciRetracement: predictions[3],
-                vosc: predictions[4]
+                vosc: predictions[4],
+                ema: predictions[5]
             };
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData)
@@ -275,11 +274,12 @@ app.post('/check-profitability', async (req, res) => {
         // Execute all promises
 
         const responses = await Promise.all(promises);
-        console.log(promises)
+
         const data = responses.map(response => response.data);
-        console.log(`Array Data:`, data)
+
         const prediction = determineProfitability(data, formulaType);
-        res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES, TECHINCAL_DATA]);
+
+        res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]);
     } catch (error) {
         console.error(error);
         res.json({ Message: 'Nope' })
@@ -348,15 +348,15 @@ async function getPairData(cryptoAsset, quoteCurrency, interval) {
 function determineProfitability(data, formula) {
 
     switch (formula) {
-        case 'formula1': TECHINCAL_DATA.rsi = rsiFormula(data[0], data[1].value);
+        case 'formula1':
             return rsiFormula(data[0], data[1].value);
-        case 'formula2': TECHINCAL_DATA.macd = macdFormula(data[0], data[1].value);
+        case 'formula2':
             return macdFormula(data[0], data[1].value);
-        case 'formula3': TECHINCAL_DATA.bollingerBands = bollingerBandsFormula(data[0], data[1].value);
+        case 'formula3':
             return bollingerBandsFormula(data[0], data[1].value);
-        case 'formula4': TECHINCAL_DATA.fibonacciRetracement = fibonacciRetracementFormula(data[0], data[1].value);
+        case 'formula4': ;
             return fibonacciRetracementFormula(data[0], data[1].value);
-        case 'formula5': TECHINCAL_DATA.vosc = voscFormula(data[0], data[1].value);
+        case 'formula5':
             return voscFormula(data[0], data[1].value);
         default:
             return 'neutral';
@@ -670,6 +670,24 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
+async function logBulls(pair, flagType, targetPrice, flagpoleHeight) {
+    const logDir = path.join(__dirname, 'logs');
+    const logFile = path.join(logDir, 'flag_patterns.log');
+    const timestamp = new Date().toISOString();
+    const logEntry = `${timestamp} - ${pair} - ${flagType} Flag detected. Target Price: ${targetPrice}, Flagpole Height: ${flagpoleHeight}\n`;
+
+    try {
+        // Create logs directory if it doesn't exist
+        fs.mkdir(logDir, { recursive: true });
+
+        // Append to the log file
+        fs.appendFile(logFile, logEntry);
+        console.log(`Flag pattern logged for ${pair}`);
+    } catch (error) {
+        console.error('Error logging flag pattern:', error);
+    }
+}
+
 async function drawBearFlag(candleData) {
     const canvasWidth = 1200; // Adjust as needed
     const canvasHeight = 600; // Adjust as needed
@@ -915,7 +933,8 @@ function bollingerBandsFormula(data, historicalData = []) {
         // Check for potential breakout
         if (bandwidth < 0.1 && trend !== 'unknown') {
             direction = trend;
-            value = 3;
+            if (direction === "up") { value = -1; }
+            if (direction === "down") { value = 2; }
             reason += `, low bandwidth (${bandwidth.toFixed(2)}), potential ${trend}ward breakout`;
         }
     }
@@ -924,6 +943,8 @@ function bollingerBandsFormula(data, historicalData = []) {
     if (trend !== 'unknown') {
         reason += `, overall trend: ${trend}`;
     }
+    if (direction === 'down') { direction = 'fall' }
+    if (direction === 'up') { direction = 'rise' }
 
     return { direction, value, reason, percentB, bandwidth };
 }
@@ -1100,7 +1121,7 @@ async function emaCrossoverFormula(cryptoAsset, interval, period) {
 
         if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return { direction: 'rise', value: 0 };
         if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return { direction: 'fall', value: 1 };
-        return { direction: 'neutral', value: '00' };
+        return { direction: 'neutral', value: '00', reason: "dont know" };
     } catch (error) {
         console.error(error);
         throw new Error('Failed to retrieve EMA data (function).');
@@ -1114,6 +1135,7 @@ function evaluateAssetDirection(predictions) {
     let neutralCount = 0;
 
     for (let prediction of predictions) {
+        console.log(`Prediction:`, prediction)
         if (prediction.value === 0) riseCount++;
         else if (prediction.value === 1) fallCount++;
         else if (prediction.value === 2) fallCount = fallCount + 2;
@@ -1133,75 +1155,96 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
     const { flagPattern, flagpoleHeight } = patternData;
 
     let priceChangePercentage = 0;
-    let confidenceScore = 0;
+    let predictions = [];
 
     // RSI contribution
     if (rsi.value < 30) {
-        priceChangePercentage += 2; // Expect 2% increase
-        confidenceScore += 1;
+        priceChangePercentage += 2;
+        predictions.push({ value: 0 }); // rise
     } else if (rsi.value > 70) {
-        priceChangePercentage -= 2; // Expect 2% decrease
-        confidenceScore += 1;
+        priceChangePercentage -= 2;
+        predictions.push({ value: 1 }); // fall
+    } else {
+        predictions.push({ value: '00' }); // neutral
     }
 
     // MACD contribution
     if (macd.direction === 'rise') {
         priceChangePercentage += 1.5;
-        confidenceScore += 1;
+        predictions.push({ value: 0 }); // rise
     } else if (macd.direction === 'fall') {
         priceChangePercentage -= 1.5;
-        confidenceScore += 1;
+        predictions.push({ value: 1 }); // fall
+    } else {
+        predictions.push({ value: '00' }); // neutral
     }
 
     // Bollinger Bands contribution
     const bbPercentage = (currentPrice - bollingerBands.lowerBand) / (bollingerBands.upperBand - bollingerBands.lowerBand);
     if (bbPercentage < 0.2) {
         priceChangePercentage += 2;
-        confidenceScore += 1;
+        predictions.push({ value: 0 }); // rise
     } else if (bbPercentage > 0.8) {
         priceChangePercentage -= 2;
-        confidenceScore += 1;
+        predictions.push({ value: 1 }); // fall
+    } else {
+        predictions.push({ value: '00' }); // neutral
     }
 
     // Fibonacci Retracement contribution
     if (fibonacciRetracement.direction === 'rise') {
         priceChangePercentage += 1;
-        confidenceScore += 0.5;
+        predictions.push({ value: 0 }); // rise
     } else if (fibonacciRetracement.direction === 'fall') {
         priceChangePercentage -= 1;
-        confidenceScore += 0.5;
+        predictions.push({ value: 1 }); // fall
+    } else {
+        predictions.push({ value: '00' }); // neutral
     }
 
     // VOSC contribution
     if (vosc.direction === 'rise') {
         priceChangePercentage += 1;
-        confidenceScore += 0.5;
+        predictions.push({ value: 0 }); // rise
     } else if (vosc.direction === 'fall') {
         priceChangePercentage -= 1;
-        confidenceScore += 0.5;
+        predictions.push({ value: 1 }); // fall
+    } else {
+        predictions.push({ value: '00' }); // neutral
     }
 
     // Flag pattern contribution
     if (flagPattern === 'bull' && flagpoleHeight) {
-        priceChangePercentage += (flagpoleHeight / currentPrice) * 100;
-        confidenceScore += 2;
+        let flagPolePercentage = (flagpoleHeight / currentPrice) * 100;
+        priceChangePercentage += flagPolePercentage;
+        predictions.push({ value: -1 }); // strong rise
     } else if (flagPattern === 'bear' && flagpoleHeight) {
-        priceChangePercentage -= (flagpoleHeight / currentPrice) * 100;
-        confidenceScore += 2;
+        let flagPolePercentage = (flagpoleHeight / currentPrice) * 100;
+        priceChangePercentage -= flagPolePercentage;
+        predictions.push({ value: 2 }); // strong fall
     }
 
     // Calculate target price
-    const targetPrice = currentPrice * (1 + priceChangePercentage / 100);
+    const targetPrice = parseFloat((currentPrice * (1 + priceChangePercentage / 100)).toFixed(8));
 
-    // Normalize confidence score to a 0-100 scale
-    const maxConfidenceScore = 7; // Maximum possible confidence score
-    const normalizedConfidence = (confidenceScore / maxConfidenceScore) * 100;
+    // Use evaluateAssetDirection to determine the overall direction
+    const predictedDirection = evaluateAssetDirection(predictions);
+
+    // Calculate confidence score
+    const totalPredictions = predictions.length;
+    const directionCount = predictions.filter(p =>
+        (predictedDirection === 'rise' && (p.value === 0 || p.value === -1)) ||
+        (predictedDirection === 'fall' && (p.value === 1 || p.value === 2))
+    ).length;
+    const confidence = Math.round((directionCount / totalPredictions) * 100);
 
     return {
         currentPrice,
         targetPrice,
         priceChangePercentage,
-        confidence: normalizedConfidence
+        predictedDirection,
+        confidence,
+        predictions
     };
 }
 

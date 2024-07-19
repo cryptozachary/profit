@@ -38,6 +38,9 @@ function setupEventListeners() {
 function toggleAutoScan() {
     const toggleButton = document.getElementById('toggleAutoScan');
     const intervalSelect = document.getElementById('scanInterval');
+    const assetOption = document.getElementById('chooseAsset');
+    const formulaOption = document.getElementById('formula');
+    const checkBox = document.getElementById('checkbox');
 
     isAutoScanning = !isAutoScanning;
 
@@ -45,11 +48,17 @@ function toggleAutoScan() {
         toggleButton.textContent = 'Stop Auto Scan';
         toggleButton.classList.add('active');
         intervalSelect.disabled = true;
+        assetOption.disabled = true;
+        formulaOption.disabled = true;
+        checkBox.disabled = true;
         startAutoScanning();
     } else {
         toggleButton.textContent = 'Start Auto Scan';
         toggleButton.classList.remove('active');
         intervalSelect.disabled = false;
+        assetOption.disabled = false;
+        formulaOption.disabled = false;
+        checkBox.disabled = false;
         stopAutoScanning();
     }
 }
@@ -185,9 +194,11 @@ async function processResponse(data) {
     console.log("Show Data:", data);
     if (Array.isArray(data) && data.length >= 2) {
         const prediction = data[0].isProfitable;
-        const theReasons = (data[2] !== null && data[2] !== undefined) ? data[2].reasons : null
+        const theReasons = (data[2] !== null && data[2] !== undefined) ? data[2].reasons : null;
+        const theDirection = (data[3] !== null && data[3] !== undefined) ? data[3].targets.predictedDirection : undefined;
         updateDisplays(data[1], data[3]);
-        updateResultMessage(prediction, data[0], theReasons);
+        updateResultMessage(prediction, data[0], theReasons, theDirection, data[1])
+
     } else {
         throw new Error('Unexpected server response format');
     }
@@ -202,39 +213,66 @@ function updateDisplays(data, data2) {
     updateElementText('emaValue', data.emaValue);
     updateElementText('bollingerValue', data.bollValue);
     updateElementText('macdValue', data.MacdValue);
-    updateElementText('targetValue', data2.targets.targetPrice);
-    updateElementText('percentageValue', data2.targets.priceChangePercentage);
-    updateElementText('confidenceValue', data2.targets.confidence);
+
+    if (data2) {
+        console.log(data2)
+        updateElementText('targetValue', data2.targets.targetPrice);
+        updateElementText('percentageValue', data2.targets.priceChangePercentage);
+        updateElementText('confidenceValue', data2.targets.confidence);
+    }
 }
 
-function updateResultMessage(prediction, data, reason) {
-    console.log(prediction);
+function updateResultMessage(prediction, data, reason, direction, name) {
+    console.log(`Prediction: ${prediction} (Type: ${typeof prediction})`);
+    console.log(`Direction: ${direction} (Type: ${typeof direction})`);
+    console.log(`Name: ${name.name}`);
     let resultText;
+
     switch (prediction) {
-        case 'rise':
-            resultText = `The asset is likely to increase in price!`;
-            for (let i = 0; i < reason.length - 1; i++) {
-                resultText += ` ${reason[i].reason}. `;
-            };
-            break;
-        case 'fall':
-            resultText = "The asset is likely to decrease in price!";
-            break;
         case false:
             resultText = `${data.theError} `;
             break;
-        case 'neutral':
-            resultText = "The asset's price movement is uncertain.";
-            break;
         case true:
-            resultText = `Flag pattern exist with price target of ${data.flagPrice} and flag pole height of ${data.flagHeight} `;
+            resultText = `Flag pattern exists with a price target of ${data.flagPrice} and flag pole height of ${data.flagHeight} `;
+            break;
+        case 'rise':
+        case 'fall':
+        case 'neutral':
+            resultText = `${name.name} is likely to ${prediction} in price!`;
+            if (reason) {
+                for (let i = 0; i < reason.length - 1; i++) {  // Changed loop condition to include the last element
+                    resultText += ` ${reason[i].reason}.`;
+                }
+            };
             break;
         default:
-            resultText = "The asset's price movement is uncertain.";
+            resultText = `${name.name} price movement is uncertain. Default Prediction.`;
             break;
     }
+
+    console.log(`Result text after prediction switch: ${resultText}`);
+
+    if (direction) {
+        switch (direction) {
+            case 'rise':
+            case 'fall':
+            case 'neutral':
+                resultText = `${name.name} - ${direction} in price!`;
+                if (reason) {
+                    for (let i = 0; i < reason.length - 1; i++) {  // Same change as above
+                        resultText += ` ${reason[i].reason}.`;
+                    }
+                };
+                break;
+            default:
+                resultText = `${name.name} price movement is uncertain. Default Direction.`;
+                break;
+        }
+    }
+    console.log(`Final result text: ${resultText}`);
     updateElementText('result', resultText);
 }
+
 
 function displayError(message) {
     updateElementText('result', message);
