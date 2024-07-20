@@ -220,7 +220,7 @@ app.post('/check-profitability', async (req, res) => {
             };
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
-            await logBulls(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period)
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period)
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
 
         } catch (error) {
@@ -671,7 +671,7 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
-async function logBulls(pair, currentPrice, targetPrice, interval, period, direction) {
+async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction) {
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
@@ -1157,74 +1157,105 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
 
     let priceChangePercentage = 0;
     let confidenceScore = 0;
+    let maxConfidenceScore = 0;
+    let predictedDirection = 'neutral';
 
     // RSI contribution
+    maxConfidenceScore += 2;
     if (rsi.value < 30) {
-        priceChangePercentage += 2; // Expect 2% increase
-        confidenceScore += 1;
+        priceChangePercentage += 2;
+        confidenceScore += 2;
+        predictedDirection = 'rise';
     } else if (rsi.value > 70) {
-        priceChangePercentage -= 2; // Expect 2% decrease
-        confidenceScore += 1;
+        priceChangePercentage -= 2;
+        confidenceScore += 2;
+        predictedDirection = 'fall';
     }
 
     // MACD contribution
+    maxConfidenceScore += 2;
     if (macd.direction === 'rise') {
         priceChangePercentage += 1.5;
-        confidenceScore += 1;
+        confidenceScore += 2;
+        predictedDirection = 'rise';
     } else if (macd.direction === 'fall') {
         priceChangePercentage -= 1.5;
-        confidenceScore += 1;
+        confidenceScore += 2;
+        predictedDirection = 'fall';
     }
 
     // Bollinger Bands contribution
+    maxConfidenceScore += 2;
     const bbPercentage = (currentPrice - bollingerBands.lowerBand) / (bollingerBands.upperBand - bollingerBands.lowerBand);
     if (bbPercentage < 0.2) {
         priceChangePercentage += 2;
-        confidenceScore += 1;
+        confidenceScore += 2;
+        predictedDirection = 'rise';
     } else if (bbPercentage > 0.8) {
         priceChangePercentage -= 2;
-        confidenceScore += 1;
+        confidenceScore += 2;
+        predictedDirection = 'fall';
     }
 
     // Fibonacci Retracement contribution
+    maxConfidenceScore += 1;
     if (fibonacciRetracement.direction === 'rise') {
         priceChangePercentage += 1;
-        confidenceScore += 0.5;
+        confidenceScore += 1;
+        predictedDirection = 'rise';
     } else if (fibonacciRetracement.direction === 'fall') {
         priceChangePercentage -= 1;
-        confidenceScore += 0.5;
+        confidenceScore += 1;
+        predictedDirection = 'fall';
     }
 
     // VOSC contribution
+    maxConfidenceScore += 1;
     if (vosc.direction === 'rise') {
         priceChangePercentage += 1;
-        confidenceScore += 0.5;
+        confidenceScore += 1;
+        predictedDirection = 'rise';
     } else if (vosc.direction === 'fall') {
         priceChangePercentage -= 1;
-        confidenceScore += 0.5;
+        confidenceScore += 1;
+        predictedDirection = 'fall';
     }
 
     // Flag pattern contribution
+    maxConfidenceScore += 2;
     if (flagPattern === 'bull' && flagpoleHeight) {
-        priceChangePercentage += (flagpoleHeight / currentPrice) * 100;
+        let flagPolePercentage = (flagpoleHeight / currentPrice) * 100;
+        priceChangePercentage += flagPolePercentage;
         confidenceScore += 2;
+        predictedDirection = 'rise';
     } else if (flagPattern === 'bear' && flagpoleHeight) {
-        priceChangePercentage -= (flagpoleHeight / currentPrice) * 100;
+        let flagPolePercentage = (flagpoleHeight / currentPrice) * 100;
+        priceChangePercentage -= flagPolePercentage;
         confidenceScore += 2;
+        predictedDirection = 'fall';
+    }
+
+    // Ensure the price change aligns with the predicted direction
+    if (predictedDirection === 'rise' && priceChangePercentage < 0) {
+        priceChangePercentage = Math.abs(priceChangePercentage);
+    } else if (predictedDirection === 'fall' && priceChangePercentage > 0) {
+        priceChangePercentage = -Math.abs(priceChangePercentage);
     }
 
     // Calculate target price
-    const targetPrice = currentPrice * (1 + priceChangePercentage / 100);
+    const targetPrice = parseFloat((currentPrice * (1 + priceChangePercentage / 100)).toFixed(8));
 
     // Normalize confidence score to a 0-100 scale
-    const maxConfidenceScore = 7; // Maximum possible confidence score
     const normalizedConfidence = (confidenceScore / maxConfidenceScore) * 100;
 
     return {
         currentPrice,
         targetPrice,
         priceChangePercentage,
-        confidence: Math.round(normalizedConfidence)
+        predictedDirection,
+        confidence: Math.round(normalizedConfidence),
+        rawConfidenceScore: confidenceScore,
+        maxConfidenceScore: maxConfidenceScore
     };
 }
 
