@@ -1,7 +1,7 @@
 // Define global variables
 const pairs = Array.from(document.querySelector('#chooseAsset').options).map(option => option.value);
 console.log('Available pairs:', pairs);
-let currentPairIndex = 0;
+let currentPairIndex = document.getElementById('chooseAsset').selectedIndex
 let isAutoScanning = false;
 let scanInterval;
 
@@ -11,28 +11,25 @@ document.addEventListener('DOMContentLoaded', initializeApplication);
 function initializeApplication() {
     initializeUI();
     setupEventListeners();
-    // if (pairs.length > 0) {
-    //     updateUIWithPairData(pairs[0]);
-    // } else {
-    //     console.warn('No pairs available for initial update');
-    // }
 }
 
 function initializeUI() {
-    // Initialize any UI elements that need setup
-    // For now, this is empty but can be used for future UI initializations
+    // Set the selected index on the UI to reflect the persisted pair
+    // document.getElementById('chooseAsset').selectedIndex = currentPairIndex;
 }
 
 function setupEventListeners() {
     const toggleButton = document.getElementById('toggleAutoScan');
-    if (toggleButton) {
-        toggleButton.addEventListener('click', toggleAutoScan);
-    } else {
-        console.warn('Auto scan toggle button not found');
-    }
+    toggleButton?.addEventListener('click', toggleAutoScan);
 
-    document.getElementById('checkProfitability')?.addEventListener('click', () => checkProfitability());
+    document.getElementById('checkProfitability')?.addEventListener('click', checkProfitability);
     document.getElementById('checkbox')?.addEventListener('change', toggleParameterInputs);
+    document.getElementById('chooseAsset')?.addEventListener('change', updateCurrentPairIndex);
+}
+
+function updateCurrentPairIndex() {
+    currentPairIndex = document.getElementById('chooseAsset').selectedIndex;
+    localStorage.setItem('currentPairIndex', currentPairIndex);
 }
 
 function toggleAutoScan() {
@@ -83,7 +80,9 @@ async function scanNextPair() {
         console.error('Error in scanNextPair:', error);
     }
     currentPairIndex = (currentPairIndex + 1) % pairs.length;
+    localStorage.setItem('currentPairIndex', currentPairIndex);
 }
+
 
 async function updateUIWithPairData(pair) {
     try {
@@ -238,7 +237,7 @@ function updateResultMessage(prediction, data, reason, direction, name) {
         case 'rise':
         case 'fall':
         case 'neutral':
-            resultText = `${name.name} is likely to ${prediction} in price!`;
+            resultText = `${name.name} - ${prediction} in price!`;
             if (reason) {
                 for (let i = 0; i < reason.length - 1; i++) {  // Changed loop condition to include the last element
                     resultText += ` ${reason[i].reason}.`;
