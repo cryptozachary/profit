@@ -288,23 +288,23 @@ function updateResultMessage(prediction, data, reason, direction, name) {
 
     console.log(`Result text after prediction switch: ${resultText}`);
 
-    if (direction) {
-        switch (direction) {
-            case 'rise':
-            case 'fall':
-            case 'neutral':
-                resultText = `${name.name} - ${direction} in price!`;
-                if (reason) {
-                    for (let i = 0; i < reason.length - 1; i++) {  // Same change as above
-                        resultText += ` ${reason[i].reason}.`;
-                    }
-                };
-                break;
-            default:
-                resultText = `${name.name} price movement is uncertain. Default Direction.`;
-                break;
-        }
-    }
+    // if (direction) {
+    //     switch (direction) {
+    //         case 'rise':
+    //         case 'fall':
+    //         case 'neutral':
+    //             resultText = `${name.name} - ${direction} in price!`;
+    //             if (reason) {
+    //                 for (let i = 0; i < reason.length - 1; i++) {  // Same change as above
+    //                     resultText += ` ${reason[i].reason}.`;
+    //                 }
+    //             };
+    //             break;
+    //         default:
+    //             resultText = `${name.name} price movement is uncertain. Default Direction.`;
+    //             break;
+    //     }
+    // }
     console.log(`Final result text: ${resultText}`);
     updateElementText('result', resultText);
 }
