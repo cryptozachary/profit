@@ -9,13 +9,28 @@ let scanInterval;
 document.addEventListener('DOMContentLoaded', initializeApplication);
 
 function initializeApplication() {
+    showLoadingScreen();
     initializeUI();
     setupEventListeners();
 }
 
 function initializeUI() {
-    // Set the selected index on the UI to reflect the persisted pair
-    // document.getElementById('chooseAsset').selectedIndex = currentPairIndex;
+    const pair = pairs[currentPairIndex];
+    checkProfitability().then(() => {
+        hideLoadingScreen();
+    });
+}
+
+function showLoadingScreen() {
+    const loading = true
+    document.getElementById('loadingScreen').style.display = 'flex';
+    return loading
+}
+
+function hideLoadingScreen() {
+    const loading = false
+    document.getElementById('loadingScreen').style.display = 'none';
+    return loading
 }
 
 function setupEventListeners() {
@@ -61,7 +76,13 @@ function toggleAutoScan() {
 }
 
 function startAutoScanning() {
-    scanInterval = setInterval(scanNextPair, parseInt(document.getElementById('scanInterval').value));
+    const intervalValue = parseInt(document.getElementById('scanInterval').value);
+
+    // Call scanNextPair immediately the first time
+    scanNextPair();
+
+    // Then set up the interval for subsequent calls
+    scanInterval = setInterval(scanNextPair, intervalValue);
 }
 
 function stopAutoScanning() {
@@ -148,17 +169,33 @@ async function checkProfitability(data) {
     const [asset2, pair] = chooseAsset.split('/');
     const formula = document.getElementById('formula').value;
 
+    if (formula !== "all" && formula !== "7" && formula !== "8") {
+        const flagResult = document.getElementById('flagResult')
+        flagResult.textContent = ""
+    }
+
     if (!asset2 || !pair) {
         return displayError("Please select a valid asset pair");
     }
 
+
+    showLoadingScreen(); // Show the loading screen
+
     try {
         const requestBody = buildRequestBody(asset2, formula, pair);
         const response = await fetchData('/check-profitability', requestBody);
+        console.log('data', response);
         await processResponse(response);
+        const resultText = response[3].patternData?.flagPattern ? 'Bull Flag Detected' :
+            (response[3].patternData?.flagPattern ? 'Bear Flag Detected' : `No Flag Detected for: ${response[1].name}`);
+        updateElementText('flagResult', resultText);
+
+
     } catch (error) {
         console.error("Error:", error);
         displayError(error.message);
+    } finally {
+        hideLoadingScreen()
     }
 
     // if (data && data.bullFlag) {

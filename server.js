@@ -56,8 +56,6 @@ async function getSymbols(req, res, next) {
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
-
-
     if (formulaType !== "formula7" && formulaType !== "formula8") {
         clearObject(GLOBAL_VARIABLES);
     }
