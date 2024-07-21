@@ -218,7 +218,7 @@ app.post('/check-profitability', async (req, res) => {
             };
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
-            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period)
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction)
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
 
         } catch (error) {
@@ -673,18 +673,23 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
-    const prediction = direction === "rise" ? "Bullish" : 'Bearish';
-    const logEntry = `${timestamp} - ${pair} -${prediction}!- Curreint Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
 
-    try {
-        // Create logs directory if it doesn't exist
-        await fs.mkdir(logDir, { recursive: true });
+    console.log('Dir', direction)
 
-        // Append to the log file
-        await fs.appendFile(logFile, logEntry);
-        console.log(`Bullish signal logged for ${pair}`);
-    } catch (error) {
-        console.error('Error logging bull signal:', error);
+    if (direction !== "netural") {
+        const prediction = direction === "rise" ? "Bullish" : 'Bearish';
+        const logEntry = `${timestamp} - ${pair} -${prediction}!- Curreint Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
+
+        try {
+            // Create logs directory if it doesn't exist
+            await fs.mkdir(logDir, { recursive: true });
+
+            // Append to the log file
+            await fs.appendFile(logFile, logEntry);
+            console.log(`Bullish signal logged for ${pair}`);
+        } catch (error) {
+            console.error('Error logging bull signal:', error);
+        }
     }
 }
 
