@@ -276,7 +276,7 @@ function updateResultMessage(prediction, data, reason, direction, name) {
         case 'neutral':
             resultText = `${name.name} - ${prediction} in price!`;
             if (reason) {
-                for (let i = 0; i < reason.length - 1; i++) {  // Changed loop condition to include the last element
+                for (let i = 0; i < reason.length - 1; i++) {
                     resultText += ` ${reason[i].reason}.`;
                 }
             };

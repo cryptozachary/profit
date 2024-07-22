@@ -64,6 +64,10 @@ button {
     padding-right: 10px;
 }
 
+#resultContainer {
+    min-width: fit-content 50;
+}
+
 #checkProfitability {
     display: flex;
     justify-content: center;

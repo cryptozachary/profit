@@ -678,7 +678,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
 
     if (direction !== "netural") {
         const prediction = direction === "rise" ? "Bullish" : 'Bearish';
-        const logEntry = `${timestamp} - ${pair} -${prediction}!- Curreint Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
+        const logEntry = `${timestamp} - ${pair} -${prediction}!- Current Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
 
         try {
             // Create logs directory if it doesn't exist
@@ -686,7 +686,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
 
             // Append to the log file
             await fs.appendFile(logFile, logEntry);
-            console.log(`Bullish signal logged for ${pair}`);
+            console.log(`${prediction} signal logged for ${pair}`);
         } catch (error) {
             console.error('Error logging bull signal:', error);
         }
