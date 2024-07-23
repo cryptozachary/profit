@@ -65,7 +65,7 @@ button {
 }
 
 #resultContainer {
-    min-width: fit-content 50;
+    max-width: 700px;
 }
 
 #checkProfitability {

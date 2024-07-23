@@ -186,9 +186,12 @@ async function checkProfitability(data) {
         const response = await fetchData('/check-profitability', requestBody);
         console.log('data', response);
         await processResponse(response);
-        const resultText = response[3].patternData?.flagPattern ? 'Bull Flag Detected' :
-            (response[3].patternData?.flagPattern ? 'Bear Flag Detected' : `No Flag Detected for: ${response[1].name}`);
-        updateElementText('flagResult', resultText);
+        if (response[3]) {
+            const resultText = response[3].patternData?.flagPattern ? 'Bull Flag Detected' :
+                (response[3].patternData?.flagPattern ? 'Bear Flag Detected' : `No Flag Detected for: ${response[1].name}`);
+            updateElementText('flagResult', resultText);
+        }
+
 
 
     } catch (error) {
@@ -232,7 +235,7 @@ async function processResponse(data) {
         const prediction = data[0].isProfitable;
         const theReasons = (data[2] !== null && data[2] !== undefined) ? data[2].reasons : null;
         const theDirection = (data[3] !== null && data[3] !== undefined) ? data[3].targets.predictedDirection : undefined;
-        updateDisplays(data[1], data[3]);
+        updateDisplays(data[1], data[3], prediction);
         updateResultMessage(prediction, data[0], theReasons, theDirection, data[1])
 
     } else {
@@ -240,7 +243,7 @@ async function processResponse(data) {
     }
 }
 
-function updateDisplays(data, data2) {
+function updateDisplays(data, data2, data3) {
     updateElementText('assetName', data.name.toUpperCase());
     updateElementText('assetPriceDisplay', data.assetPrice);
     updateElementText('rsiValue', data.rsiValue);
@@ -255,6 +258,9 @@ function updateDisplays(data, data2) {
         updateElementText('targetValue', data2.targets.targetPrice);
         updateElementText('percentageValue', data2.targets.priceChangePercentage);
         updateElementText('confidenceValue', data2.targets.confidence);
+        updateElementText('consensusValue', data3);
+        updateElementText('singularValue', data2.targets.predictedDirection
+        );
     }
 }
 
@@ -263,6 +269,11 @@ function updateResultMessage(prediction, data, reason, direction, name) {
     console.log(`Direction: ${direction} (Type: ${typeof direction})`);
     console.log(`Name: ${name.name}`);
     let resultText;
+    let theDirection;
+
+    if (prediction !== direction) {
+        theDirection = 'neutral'
+    }
 
     switch (prediction) {
         case false:
@@ -274,7 +285,7 @@ function updateResultMessage(prediction, data, reason, direction, name) {
         case 'rise':
         case 'fall':
         case 'neutral':
-            resultText = `${name.name} - ${prediction} in price!`;
+            resultText = `${name.name} - ${theDirection || prediction} in price!`;
             if (reason) {
                 for (let i = 0; i < reason.length - 1; i++) {
                     resultText += ` ${reason[i].reason}.`;

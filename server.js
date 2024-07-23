@@ -182,7 +182,7 @@ app.post('/check-profitability', async (req, res) => {
                         return response;  // EMA result is already a prediction
                 }
             }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
-
+            console.log(predictions)
             const overallPrediction = evaluateAssetDirection(predictions);
 
             const bullFlagPattern = await getBullFlagSignal(
@@ -818,7 +818,10 @@ function rsiFormula(currentRSI, historicalRSI) {
     //console.log(`Historical RSI:`, historicalRSI);
 
     // Get previous RSI value
-    const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2].value : rsiValue;
+    const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2] : rsiValue;
+
+    console.log(`prev:`, historicalRSI, `CurrRsi:`, currentRSI);
+    console.log(`Previous RSI value:`, previousRSI); // Debugging line to check the value
 
     // Calculate volatility adjustment
     const volatilityAdjustment = Math.min(calculateVolatility(historicalRSI) * 2, 10); // Cap at 10
@@ -834,20 +837,21 @@ function rsiFormula(currentRSI, historicalRSI) {
     // Determine signal strength and direction
     if (rsiValue > upperThreshold) {
         const strength = overboughtDuration > 3 ? 2 : 2;
-        console.log(`Strength:`, strength)
-        return { direction: 'fall', value: strength, reason: `RSI overbought for ${overboughtDuration} periods` };
+        console.log(`Strength:`, strength);
+        return { direction: 'fall', value: strength, reason: `RSI overbought for ${overboughtDuration} periods`, RSI: rsiValue };
     } else if (rsiValue < lowerThreshold) {
         const strength = oversoldDuration > 3 ? -1 : -1;
-        console.log(`Strength:`, strength)
-        return { direction: 'rise', value: strength, reason: `RSI oversold for ${oversoldDuration} periods` };
+        console.log(`Strength:`, strength);
+        return { direction: 'rise', value: strength, reason: `RSI oversold for ${oversoldDuration} periods`, RSI: rsiValue };
     } else if (rsiValue > 50 && rsiValue < previousRSI) {
-        return { direction: 'fall', value: 1, reason: 'RSI declining from bullish territory' };
+        return { direction: 'fall', value: 1, reason: 'RSI declining from bullish territory', RSI: rsiValue };
     } else if (rsiValue < 50 && rsiValue > previousRSI) {
-        return { direction: 'rise', value: 0, reason: 'RSI rising from bearish territory' };
+        return { direction: 'rise', value: 0, reason: 'RSI rising from bearish territory', RSI: rsiValue };
     }
-
-    return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone' };
+    console.log(`Prev`, previousRSI);
+    return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone', RSI: rsiValue };
 }
+
 
 function macdFormula(data, historicalData) {
     const macdLine = parseFloat(data.valueMACD);
@@ -951,7 +955,7 @@ function bollingerBandsFormula(data, historicalData = []) {
     if (direction === 'down') { direction = 'fall' }
     if (direction === 'up') { direction = 'rise' }
 
-    return { direction, value, reason, percentB, bandwidth };
+    return { direction, value, reason, percentB, bandwidth, lowerBand: lowerBand, upperBand: upperBand };
 }
 
 function fibonacciRetracementFormula(data, historicalData = []) {
@@ -1155,6 +1159,7 @@ function evaluateAssetDirection(predictions) {
 }
 
 function estimateTargetPrice(currentPrice, technicalData, patternData) {
+
     const { rsi, macd, bollingerBands, fibonacciRetracement, vosc } = technicalData;
     const { flagPattern, flagpoleHeight } = patternData;
 
@@ -1165,11 +1170,11 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
 
     // RSI contribution
     maxConfidenceScore += 2;
-    if (rsi.value < 30) {
+    if (rsi.RSI < 30) {
         priceChangePercentage += 2;
         confidenceScore += 2;
         predictedDirection = 'rise';
-    } else if (rsi.value > 70) {
+    } else if (rsi.RSI > 70) {
         priceChangePercentage -= 2;
         confidenceScore += 2;
         predictedDirection = 'fall';
@@ -1190,6 +1195,7 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
     // Bollinger Bands contribution
     maxConfidenceScore += 2;
     const bbPercentage = (currentPrice - bollingerBands.lowerBand) / (bollingerBands.upperBand - bollingerBands.lowerBand);
+    console.log('bbpercentage:', bbPercentage)
     if (bbPercentage < 0.2) {
         priceChangePercentage += 2;
         confidenceScore += 2;
