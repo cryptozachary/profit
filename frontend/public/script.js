@@ -53,6 +53,9 @@ function toggleAutoScan() {
     const assetOption = document.getElementById('chooseAsset');
     const formulaOption = document.getElementById('formula');
     const checkBox = document.getElementById('checkbox');
+    const intervalSelection = document.getElementById('interval');
+    const periodSelection = document.getElementById('period');
+
 
     isAutoScanning = !isAutoScanning;
 
@@ -63,6 +66,8 @@ function toggleAutoScan() {
         assetOption.disabled = true;
         formulaOption.disabled = true;
         checkBox.disabled = true;
+        intervalSelection.disabled = true;
+        periodSelection.disabled = true;
         startAutoScanning();
     } else {
         toggleButton.textContent = 'Start Auto Scan';
@@ -71,6 +76,8 @@ function toggleAutoScan() {
         assetOption.disabled = false;
         formulaOption.disabled = false;
         checkBox.disabled = false;
+        intervalSelection.disabled = false;
+        periodSelection.disabled = false;
         stopAutoScanning();
     }
 }
@@ -288,7 +295,7 @@ function updateResultMessage(prediction, data, reason, direction, name) {
             resultText = `${name.name} - ${theDirection || prediction} in price!`;
             if (reason) {
                 for (let i = 0; i < reason.length - 1; i++) {
-                    resultText += ` ${reason[i].reason}.`;
+                    resultText += ` ${reason[i].reason}. `;
                 }
             };
             break;

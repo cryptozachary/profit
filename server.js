@@ -182,7 +182,7 @@ app.post('/check-profitability', async (req, res) => {
                         return response;  // EMA result is already a prediction
                 }
             }).filter(prediction => prediction !== null); // Remove null entries (for index 1)
-            console.log(predictions)
+            //console.log(predictions)
             const overallPrediction = evaluateAssetDirection(predictions);
 
             const bullFlagPattern = await getBullFlagSignal(
@@ -217,8 +217,10 @@ app.post('/check-profitability', async (req, res) => {
                 ema: predictions[5]
             };
 
+            console.log(`ema:`, predictions[5])
+
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
-            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction)
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection)
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
 
         } catch (error) {
@@ -669,14 +671,18 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
-async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction) {
+async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2) {
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
 
+    let logAsset = false;
+
+    logAsset = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2 ? true : false;
+
     console.log('Dir', direction)
 
-    if (direction !== "netural") {
+    if (logAsset) {
         const prediction = direction === "rise" ? "Bullish" : 'Bearish';
         const logEntry = `${timestamp} - ${pair} -${prediction}!- Current Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
 
@@ -820,8 +826,8 @@ function rsiFormula(currentRSI, historicalRSI) {
     // Get previous RSI value
     const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2] : rsiValue;
 
-    console.log(`prev:`, historicalRSI, `CurrRsi:`, currentRSI);
-    console.log(`Previous RSI value:`, previousRSI); // Debugging line to check the value
+    //console.log(`prev:`, historicalRSI, `CurrRsi:`, currentRSI);
+    //console.log(`Previous RSI value:`, previousRSI); // Debugging line to check the value
 
     // Calculate volatility adjustment
     const volatilityAdjustment = Math.min(calculateVolatility(historicalRSI) * 2, 10); // Cap at 10
@@ -1130,7 +1136,7 @@ async function emaCrossoverFormula(cryptoAsset, interval, period) {
 
         if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return { direction: 'rise', value: 0 };
         if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return { direction: 'fall', value: 1 };
-        return { direction: 'neutral', value: '00', reason: "dont know" };
+        return { direction: 'neutral', value: '00', reason: "Unable to determine EMA" };
     } catch (error) {
         console.error(error);
         throw new Error('Failed to retrieve EMA data (function).');
