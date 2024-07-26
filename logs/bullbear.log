@@ -1,15 +1,23 @@
-2024-07-26T16:51:27.811Z - AVAX -Bullish!- Current Price: 28.75 Target Price: 29.18125 , 1h/14
-2024-07-26T16:59:34.151Z - AVAX -Bullish!- Current Price: 28.6 Target Price: 29.029 , 1h/14
-2024-07-26T16:59:39.412Z - BTC -Bearish!- Current Price: 67380.01 Target Price: 67043.10995 , 1h/14
-2024-07-26T17:00:09.786Z - BTC -Bearish!- Current Price: 67396.01 Target Price: 65037.14965 , 1h/14
-2024-07-26T17:02:05.031Z - AAVE -Bearish!- Current Price: 98.54 Target Price: 95.0911 , 1h/14
-2024-07-26T17:02:18.539Z - BTC -Bearish!- Current Price: 67349.62 Target Price: 64992.3833 , 1h/14
-2024-07-26T17:04:18.057Z - BTC -Bearish!- Current Price: 67420.86 Target Price: 65061.1299 , 1h/14
-2024-07-26T17:06:11.662Z - BTC -Bearish!- Current Price: 67436.01 Target Price: 65075.74965 , 1h/14
-2024-07-26T17:09:35.854Z - BTC -Bearish!- Current Price: 67315.99 Target Price: 64959.93035 , 1h/14
-2024-07-26T17:10:49.714Z - BTC -Bearish!- Current Price: 67340 Target Price: 64983.1 , 1h/14
-2024-07-26T17:12:52.755Z - BTC -Bearish!- Current Price: 67340 Target Price: 64983.1 , 1h/14
-2024-07-26T17:18:48.133Z - BTC -Bearish!- Current Price: 67388.77 Target Price: 65030.16305 , 1h/14
-2024-07-26T17:21:44.403Z - BTC -Bearish!- Current Price: 67419.48 Target Price: 65059.7982 , 1h/14
-2024-07-26T17:24:15.823Z - BTC -Bearish!- Current Price: 67429.78 Target Price: 65069.7377 , 1h/14
-2024-07-26T17:28:09.077Z - BTC -Bearish!- Current Price: 67489.5 Target Price: 65127.3675 , 1h/14
+.settings-container {
+    position: absolute;
+    bottom: 30px;
+    right: 340px;
+}2024-07-26T19:54:24.432Z - BTC -Bearish!- Current Price: 67865.99 Target Price: 64133.36055 , 1h/14
+2024-07-26T19:54:46.686Z - BTTC -Bullish!- Current Price: 8.7e-7 Target Price: 8.8e-7 , 1h/14
+2024-07-26T19:55:19.720Z - BTC -Bearish!- Current Price: 67822 Target Price: 64091.79 , 1h/14
+2024-07-26T19:56:17.745Z - BTC -Bearish!- Current Price: 67883.99 Target Price: 64150.37055 , 1h/14
+2024-07-26T19:58:48.664Z - BTC -Bearish!- Current Price: 67966.01 Target Price: 64227.87945 , 1h/14
+2024-07-26T20:01:55.730Z - BTC -Bearish!- Current Price: 67905.98 Target Price: 64171.1511 , 1h/14
+2024-07-26T20:02:14.559Z - BTC -Bearish!- Current Price: 67915.58 Target Price: 64180.2231 , 1h/14
+2024-07-26T20:02:49.855Z - BTC -Bearish!- Current Price: 67892 Target Price: 64157.94 , 1h/14
+2024-07-26T20:03:13.460Z - BTC -Bearish!- Current Price: 67882.28 Target Price: 64148.7546 , 1h/14
+2024-07-26T20:07:21.128Z - BTC -Bearish!- Current Price: 67831.99 Target Price: 64101.23055 , 1h/14
+2024-07-26T20:08:01.265Z - BTC -Bearish!- Current Price: 67816.73 Target Price: 64086.80985 , 1h/14
+2024-07-26T20:08:17.807Z - BTC -Bearish!- Current Price: 67827 Target Price: 64096.515 , 1h/14
+2024-07-26T20:11:46.300Z - BTC -Bearish!- Current Price: 67816 Target Price: 64086.12 , 1h/14
+2024-07-26T20:12:34.425Z - BTC -Bearish!- Current Price: 67811.54 Target Price: 64081.9053 , 1h/14
+2024-07-26T20:13:35.356Z - BTC -Bearish!- Current Price: 67769.43 Target Price: 65397.49995 , 1h/14
+2024-07-26T20:14:04.619Z - BTC -Bearish!- Current Price: 67769.43 Target Price: 65397.49995 , 1h/14
+2024-07-26T20:14:50.737Z - BTC -Bearish!- Current Price: 67750 Target Price: 65378.75 , 1h/14
+2024-07-26T20:15:19.210Z - BTC -Bearish!- Current Price: 67728 Target Price: 65357.52 , 1h/14
+2024-07-26T20:21:23.528Z - BTC -Bearish!- Current Price: 67833.17 Target Price: 64102.34565 , 1h/14
