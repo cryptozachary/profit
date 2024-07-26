@@ -251,6 +251,8 @@ async function processResponse(data) {
 }
 
 function updateDisplays(data, data2, data3) {
+    let consensusTotals = `${data3} - [Rise:${data.rise}, Fall:${data.fall}, Neutral:${data.neutral}]`;
+
     updateElementText('assetName', data.name.toUpperCase());
     updateElementText('assetPriceDisplay', data.assetPrice);
     updateElementText('rsiValue', data.rsiValue);
@@ -259,14 +261,19 @@ function updateDisplays(data, data2, data3) {
     updateElementText('emaValue', data.emaValue);
     updateElementText('bollingerValue', data.bollValue);
     updateElementText('macdValue', data.MacdValue);
+    updateElementText('targetValue', "N/A");
+    updateElementText('percentageValue', "N/A");
+    updateElementText('consensusValue', "N/A");
+    updateElementText('singularValue', "N/A");
 
     if (data2) {
+        let singularScore = `${data2.targets.predictedDirection} - [Confidence:${data2.targets.confidence}]`;
         console.log(data2)
         updateElementText('targetValue', data2.targets.targetPrice);
         updateElementText('percentageValue', data2.targets.priceChangePercentage);
-        updateElementText('confidenceValue', data2.targets.confidence);
-        updateElementText('consensusValue', data3);
-        updateElementText('singularValue', data2.targets.predictedDirection
+        //updateElementText('confidenceValue', data2.targets.confidence);
+        updateElementText('consensusValue', consensusTotals);
+        updateElementText('singularValue', singularScore
         );
     }
 }

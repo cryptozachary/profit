@@ -7,6 +7,7 @@ const express = require('express');
 const axios = require('axios');
 const app = express();
 const { createCanvas, loadImage } = require('canvas');
+const { reset } = require('nodemon');
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
@@ -20,12 +21,21 @@ const GLOBAL_VARIABLES = {
     MacdValue: "",
     emaValue: "",
     name: "",
+    rise: "",
+    fall: "",
+    neutral: "",
 }
 
 function clearObject(obj) {
     Object.keys(obj).forEach((key) => {
         obj[key] = '';
     });
+}
+
+function resetConsensus() {
+    GLOBAL_VARIABLES.rise = "N/A";
+    GLOBAL_VARIABLES.fall = "N/A";
+    GLOBAL_VARIABLES.neutral = "N/A";
 }
 
 
@@ -273,12 +283,15 @@ app.post('/check-profitability', async (req, res) => {
         if (endpoint.ep2) promises.push(axios.get(endpoint.ep2));
 
         // Execute all promises
-
         const responses = await Promise.all(promises);
-
         const data = responses.map(response => response.data);
 
+
+        // determine the profitable for the selected formula
         const prediction = determineProfitability(data, formulaType);
+
+        //reset the global conensus totals to NA because singluar formulas are selected
+        resetConsensus()
 
         res.json([{ isProfitable: prediction.direction }, GLOBAL_VARIABLES]);
     } catch (error) {
@@ -1156,7 +1169,9 @@ function evaluateAssetDirection(predictions) {
         else if (prediction.value === -1) riseCount = riseCount + 2;
         else neutralCount++; // prediction.value === '00'
     }
-
+    GLOBAL_VARIABLES.rise = riseCount;
+    GLOBAL_VARIABLES.fall = fallCount;
+    GLOBAL_VARIABLES.neutral = neutralCount;
     console.log(['Rise:', riseCount, 'Fall:', fallCount, 'Neutral:', neutralCount])
 
     if (riseCount > fallCount && riseCount > neutralCount) return "rise";
