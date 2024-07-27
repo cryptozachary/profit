@@ -43,13 +43,33 @@ footer {
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     position: relative;
-    /* Ensure relative positioning for overlapping elements */
+    z-index: 1;
+
 }
 
-.settings-container {
-    position: absolute;
-    bottom: 5px;
-    right: 340px;
+.settings-button {
+    background-color: #5a9bd3;
+    /* Lighter blue color */
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+    transform: translateY(-50%);
+    position: relative;
+    bottom: -75px;
+    right: -140px;
+    z-index: 0;
+    /* Center vertically */
+}
+
+.settings-button:active {
+    transform: translate(2px, -50%);
+    box-shadow: 0 3px 5px rgba(0, 0, 0, 0.2);
 }
 
 button {
