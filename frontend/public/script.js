@@ -36,11 +36,21 @@ function hideLoadingScreen() {
 function setupEventListeners() {
     const toggleButton = document.getElementById('toggleAutoScan');
     toggleButton?.addEventListener('click', toggleAutoScan);
+    const flipCard = document.querySelector('.flip-card');
+    const settingsButton = document.getElementById('settingsButton');
 
     document.getElementById('checkProfitability')?.addEventListener('click', checkProfitability);
     document.getElementById('checkbox')?.addEventListener('change', toggleParameterInputs);
     document.getElementById('chooseAsset')?.addEventListener('change', updateCurrentPairIndex);
-}
+
+
+
+    settingsButton.addEventListener('click', function () {
+        flipCard.classList.toggle('flipped');
+    });
+};
+
+
 
 function updateCurrentPairIndex() {
     currentPairIndex = document.getElementById('chooseAsset').selectedIndex;

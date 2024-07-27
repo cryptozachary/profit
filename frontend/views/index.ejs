@@ -18,89 +18,87 @@
             <p>Loading...</p>
         </div>
     </div>
-    <div>
-        <div class="assetInfo">
-            <p><strong>Name:</strong> <span id="assetName"></span></p>
-            <p><strong>Price:</strong> <span id="assetPriceDisplay"></span></p>
-            <p><strong>RSI:</strong> <span id="rsiValue"></span><span id="rsiReason"></span></p>
-            <p><strong>Volume:</strong> <span id="volumeValue"></span><span id="volumeReason"></span></p>
-            <p><strong>Fibonacci:</strong> <span id="fibonacciValue"></span><span id="fibReason"></span></p>
-            <p><strong>EMA:</strong> <span id="emaValue"></span><span id="emaReason"></span></p>
-            <p><strong>Bollinger Bands:</strong> <span id="bollingerValue"></span><span id="bolReason"></span></p>
-            <p><strong>MACD:</strong> <span id="macdValue"></span><span id="macReason"></span></p>
-        </div>
-        <div class="assetInfo">
-            <p><strong>Consesus Prediction:</strong> <span id="consensusValue"></span><span id="consensusReason"></span>
-            </p>
-            <p><strong>Singular Prediction:</strong> <span id="singularValue"></span><span id="singularReason"></span>
-            <p><strong>Target Price:</strong> <span id="targetValue"></span><span id="targetReason"></span></p>
-            <p><strong>Price Change:</strong> <span id="percentageValue"></span><span id="percentageReason"></span>
-                <!-- <p><strong>Confidence:</strong> <span id="confidenceValue"></span><span id="confidenceReason"></span></p> -->
-        </div>
+    <div class="assetInfo">
+        <p><strong>Name:</strong> <span id="assetName"></span></p>
+        <p><strong>Price:</strong> <span id="assetPriceDisplay"></span></p>
+        <p><strong>RSI:</strong> <span id="rsiValue"></span><span id="rsiReason"></span></p>
+        <p><strong>Volume:</strong> <span id="volumeValue"></span><span id="volumeReason"></span></p>
+        <p><strong>Fibonacci:</strong> <span id="fibonacciValue"></span><span id="fibReason"></span></p>
+        <p><strong>EMA:</strong> <span id="emaValue"></span><span id="emaReason"></span></p>
+        <p><strong>Bollinger Bands:</strong> <span id="bollingerValue"></span><span id="bolReason"></span></p>
+        <p><strong>MACD:</strong> <span id="macdValue"></span><span id="macReason"></span></p>
     </div>
+    <div class="assetInfo">
+        <p><strong>Consesus Prediction:</strong> <span id="consensusValue"></span><span id="consensusReason"></span></p>
+        <p><strong>Singular Prediction:</strong> <span id="singularValue"></span><span id="singularReason"></span></p>
+        <p><strong>Target Price:</strong> <span id="targetValue"></span><span id="targetReason"></span></p>
+        <p><strong>Price Change:</strong> <span id="percentageValue"></span><span id="percentageReason"></span></p>
     </div>
     <div id="resultContainer">
         <p id="result"></p>
     </div>
-    <!-- Settings Button -->
-    <div class="settings-container">
-        <button id="settingsButton" class="settings-button">
-            Settings
-        </button>
-    </div>
-    <div class="container">
-        <select id="chooseAsset">
-            <% for (let symbol of symbols) { %>
-                <option value="<%= symbol %>" <%=symbol=="BTC/USDT" ? 'selected' : '' %>>
-                    <%= symbol %>
-                </option>
-                <% } %>
-        </select>
-        <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)" value="btc" hidden>
-        <select id="formula">
-            <option value="all" style="font-weight: bold;">All Strategies</option>
-            <option value="formula1">RSI</option>
-            <option value="formula2">MACD</option>
-            <option value="formula3">Bollinger Bands</option>
-            <option value="formula4">Fibonacci Retracement</option>
-            <option value="formula5">Volume Oscillator (VOSC)</option>
-            <option value="formula6">EMA</option>
-            <option value="formula7">Bear Flag Exist?</option>
-            <option value="formula8">Bull Flag Exist?</option>
-        </select>
-        <div id="formulaParameters">
-            <select class="params" id="interval" disabled>
-                <option value="1m">1 minute</option>
-                <option value="5m">5 minutes</option>
-                <option value="15m">15 minutes</option>
-                <option value="30m">30 minutes</option>
-                <option value="1h" selected>1hr</option>
-                <option value="2h">2hr</option>
-                <option value="4h">4hr</option>
-                <option value="12h">12hr</option>
-                <option value="1d">1d</option>
-                <option value="1w">1 week</option>
-            </select>
-            <input class="params" id="period" type="numer" min="1" max="100" value="14"
-                placeholder="Period (default: 14)" disabled>
-            <input id="checkbox" type="checkbox" name="myCheckbox" value="checkboxValue">
+    <div class="flip-card">
+        <div class="flip-card-inner">
+            <div class="flip-card-front">
+                <div class="container">
+                    <select id="chooseAsset">
+                        <% for (let symbol of symbols) { %>
+                            <option value="<%= symbol %>" <%=symbol=="BTC/USDT" ? 'selected' : '' %>>
+                                <%= symbol %>
+                            </option>
+                            <% } %>
+                    </select>
+                    <input type="text" id="asset" placeholder="Enter Crypto Asset (e.g., BTC/USDT)" value="btc" hidden>
+                    <select id="formula">
+                        <option value="all" style="font-weight: bold;">All Strategies</option>
+                        <option value="formula1">RSI</option>
+                        <option value="formula2">MACD</option>
+                        <option value="formula3">Bollinger Bands</option>
+                        <option value="formula4">Fibonacci Retracement</option>
+                        <option value="formula5">Volume Oscillator (VOSC)</option>
+                        <option value="formula6">EMA</option>
+                        <option value="formula7">Bear Flag Exist?</option>
+                        <option value="formula8">Bull Flag Exist?</option>
+                    </select>
+                    <div id="formulaParameters">
+                        <select class="params" id="interval" disabled>
+                            <option value="1m">1 minute</option>
+                            <option value="5m">5 minutes</option>
+                            <option value="15m">15 minutes</option>
+                            <option value="30m">30 minutes</option>
+                            <option value="1h" selected>1hr</option>
+                            <option value="2h">2hr</option>
+                            <option value="4h">4hr</option>
+                            <option value="12h">12hr</option>
+                            <option value="1d">1d</option>
+                            <option value="1w">1 week</option>
+                        </select>
+                        <input class="params" id="period" type="number" min="1" max="100" value="14"
+                            placeholder="Period (default: 14)" disabled>
+                        <input id="checkbox" type="checkbox" name="myCheckbox" value="checkboxValue">
+                    </div>
+                    <div class="scan-controls">
+                        <button id="toggleAutoScan" class="toggle-button">Start Auto Scan</button>
+                        <select id="scanInterval">
+                            <option value="10000">10 seconds</option>
+                            <option value="15000" selected>15 seconds</option>
+                            <option value="20000">20 seconds</option>
+                        </select>
+                    </div>
+                    <div id="flagResult"></div>
+                    <button id="checkProfitability">Bullish or Bearish?</button>
+                </div>
+            </div>
+            <div class="flip-card-back">
+                <h2>Settings</h2>
+                <!-- Add your settings content here -->
+            </div>
         </div>
-        <div class="scan-controls">
-            <button id="toggleAutoScan" class="toggle-button">Start Auto Scan</button>
-            <select id="scanInterval">
-                <option value="10000">10 seconds</option>
-                <option value="15000" selected>15 seconds</option>
-                <option value="20000">20 seconds</option>
-            </select>
-        </div>
-        <div id="flagResult"></div>
-        <button id="checkProfitability">Bullish or Bearish?</button>
     </div>
-
+    <button id="settingsButton" class="settings-button">Settings</button>
     <footer>
         <p>&copy; 2023 Know Your Strategies</p>
     </footer>
-
     <script type="module" src="script.js"></script>
 </body>
 
