@@ -45,17 +45,14 @@ footer {
 }
 
 .container2 {
-    height: 372px;
+    /* height: 372px; */
     display: flex;
-    flex-direction: column;
     width: 100%;
-    padding: 20px;
+    /* padding: 20px; */
     border-radius: 5px;
     flex-wrap: wrap;
-    justify-content: space-between;
-    align-items: stretch;
-    align-content: center;
     gap: 5px;
+    justify-content: center;
 }
 
 .flip-card {
