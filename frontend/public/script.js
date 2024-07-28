@@ -5,6 +5,69 @@ let currentPairIndex = document.getElementById('chooseAsset').selectedIndex
 let isAutoScanning = false;
 let scanInterval;
 
+// Define functions outside of DOMContentLoaded
+function loadSavedSettings() {
+    const savedSettings = localStorage.getItem('cryptoAppSettings');
+    if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+
+        // Apply saved settings to form elements
+        document.getElementById('theme').value = settings.theme;
+        document.getElementById('exchange').value = settings.exchange;
+        document.getElementById('refreshRate').value = settings.refreshRate;
+        document.getElementById('notifications').checked = settings.notifications;
+        document.getElementById('customIndicator').value = settings.customIndicator;
+        document.getElementById('language').value = settings.language;
+
+        // Apply theme
+        applyTheme(settings.theme);
+    }
+}
+
+function applyTheme(theme) {
+    if (theme === 'dark') {
+        document.body.classList.add('dark-theme');
+        document.body.classList.remove('light-theme');
+    } else {
+        document.body.classList.add('light-theme');
+        document.body.classList.remove('dark-theme');
+    }
+}
+
+function applySettings() {
+    const savedSettings = localStorage.getItem('cryptoAppSettings');
+    if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+
+        console.log('Using exchange:', settings.exchange);
+        console.log('Refresh rate set to:', settings.refreshRate, 'seconds');
+        console.log('Notifications:', settings.notifications ? 'enabled' : 'disabled');
+        if (settings.customIndicator) {
+            console.log('Using custom indicator:', settings.customIndicator);
+        }
+        console.log('Language set to:', settings.language);
+
+        // You would typically call functions here to actually apply these settings in your app
+    }
+}
+
+function saveSettings() {
+    const settings = {
+        theme: document.getElementById('theme').value,
+        exchange: document.getElementById('exchange').value,
+        refreshRate: document.getElementById('refreshRate').value,
+        notifications: document.getElementById('notifications').checked,
+        customIndicator: document.getElementById('customIndicator').value,
+        language: document.getElementById('language').value
+    };
+
+    localStorage.setItem('cryptoAppSettings', JSON.stringify(settings));
+    applyTheme(settings.theme);
+
+    document.querySelector('.flip-card').classList.remove('flipped');
+    alert('Settings saved successfully!');
+}
+
 // Wait for the DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', initializeApplication);
 
@@ -12,6 +75,8 @@ function initializeApplication() {
     showLoadingScreen();
     initializeUI();
     setupEventListeners();
+    loadSavedSettings();
+    applySettings();
 }
 
 function initializeUI() {
@@ -38,15 +103,28 @@ function setupEventListeners() {
     toggleButton?.addEventListener('click', toggleAutoScan);
     const flipCard = document.querySelector('.flip-card');
     const settingsButton = document.getElementById('settingsButton');
+    const saveSettingsButton = document.getElementById('saveSettings');
+    const themeSelect = document.getElementById('theme');
+
+    const exchangeSelect = document.getElementById('exchange');
+    const refreshRateSelect = document.getElementById('refreshRate');
+    const notificationsCheckbox = document.getElementById('notifications');
+    const customIndicatorInput = document.getElementById('customIndicator');
+    const languageSelect = document.getElementById('language');
+
 
     document.getElementById('checkProfitability')?.addEventListener('click', checkProfitability);
     document.getElementById('checkbox')?.addEventListener('change', toggleParameterInputs);
     document.getElementById('chooseAsset')?.addEventListener('change', updateCurrentPairIndex);
 
-
-
     settingsButton.addEventListener('click', function () {
         flipCard.classList.toggle('flipped');
+    });
+
+    saveSettingsButton.addEventListener('click', saveSettings);
+
+    themeSelect.addEventListener('change', function () {
+        applyTheme(this.value);
     });
 };
 

@@ -29,7 +29,8 @@
         <p><strong>MACD:</strong> <span id="macdValue"></span><span id="macReason"></span></p>
     </div>
     <div class="assetInfo">
-        <p><strong>Consesus Prediction:</strong> <span id="consensusValue"></span><span id="consensusReason"></span></p>
+        <p><strong>Consensus Prediction:</strong> <span id="consensusValue"></span><span id="consensusReason"></span>
+        </p>
         <p><strong>Singular Prediction:</strong> <span id="singularValue"></span><span id="singularReason"></span></p>
         <p><strong>Target Price:</strong> <span id="targetValue"></span><span id="targetReason"></span></p>
         <p><strong>Price Change:</strong> <span id="percentageValue"></span><span id="percentageReason"></span></p>
@@ -90,8 +91,52 @@
                 </div>
             </div>
             <div class="flip-card-back">
-                <h2>Settings</h2>
-                <!-- Add your settings content here -->
+                <div class="container2">
+                    <h2>Settings</h2>
+                    <div class="settings-group">
+                        <label for="exchange">Exchange:</label>
+                        <select id="exchange">
+                            <option value="binance">Binance</option>
+                            <option value="coinbase">Coinbase</option>
+                            <option value="bybit">Bybit</option>
+                            <option value="bitstamp">Bitstamp</option>
+                        </select>
+                    </div>
+                    <div class="settings-group">
+                        <label for="theme">Theme:</label>
+                        <select id="theme">
+                            <option value="light">Light</option>
+                            <option value="dark">Dark</option>
+                        </select>
+                    </div>
+                    <div class="settings-group">
+                        <label for="refreshRate">Auto-refresh Rate:</label>
+                        <select id="refreshRate">
+                            <option value="5">5 seconds</option>
+                            <option value="10">10 seconds</option>
+                            <option value="30">30 seconds</option>
+                            <option value="60">1 minute</option>
+                        </select>
+                    </div>
+                    <div class="settings-group">
+                        <label for="notifications">Enable Notifications:</label>
+                        <input type="checkbox" id="notifications">
+                    </div>
+                    <div class="settings-group">
+                        <label for="customIndicator">Custom Indicator:</label>
+                        <input type="text" id="customIndicator" placeholder="e.g., SMA(20)">
+                    </div>
+                    <div class="settings-group">
+                        <label for="language">Language:</label>
+                        <select id="language">
+                            <option value="en">English</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                            <option value="de">Deutsch</option>
+                        </select>
+                    </div>
+                    <button id="saveSettings">Save Settings</button>
+                </div>
             </div>
         </div>
     </div>

@@ -34,6 +34,7 @@ footer {
 
 .container {
     display: flex;
+    width: 350px;
     flex-direction: column;
     width: 100%;
     gap: 25px;
@@ -41,6 +42,20 @@ footer {
     padding: 20px;
     border-radius: 5px;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.container2 {
+    height: 372px;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    padding: 20px;
+    border-radius: 5px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: stretch;
+    align-content: center;
+    gap: 5px;
 }
 
 .flip-card {
@@ -104,15 +119,15 @@ footer {
     gap: 8px;
     transition: transform 0.1s ease, box-shadow 0.1s ease;
     transform: translateY(-50%);
-    position: relative;
+    /* position: relative;
     bottom: 390px;
     right: -135px;
-    z-index: 0;
+    z-index: 0; */
     /* Center vertically */
 }
 
 .settings-button:active {
-    transform: translateY(2px);
+    transform: translateY(-25px);
 }
 
 button {
@@ -133,6 +148,7 @@ button {
     text-align: center;
     padding-left: 10px;
     padding-right: 10px;
+    background-color: #f9f9f9;
 }
 
 #resultContainer {
@@ -230,6 +246,79 @@ input[type="text"] {
     margin-bottom: 15px;
 }
 
+.settings-group {
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.settings-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.settings-group select,
+.settings-group input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    color: black;
+}
+
+.settings-group input[type="checkbox"] {
+    margin-right: 5px;
+}
+
+#saveSettings {
+    margin-top: 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+#saveSettings:hover {
+    background-color: #45a049;
+}
+
+/* Dark theme styles */
+body.dark-theme {
+    background-color: #222;
+    color: #2b0b0b;
+}
+
+.dark-theme .container,
+.dark-theme .flip-card-front {
+    background-color: #333;
+    color: #fff;
+}
+
+.dark-theme .flip-card-back {
+    background-color: #444;
+    color: #fff;
+}
+
+.dark-theme .settings-group select,
+.dark-theme .settings-group input[type="text"] {
+    background-color: #555;
+    color: #fff;
+    border-color: #777;
+}
+
+.dark-theme header,
+.dark-theme footer {
+    background-color: #111;
+}
+
 @keyframes spin {
     0% {
         transform: rotate(0deg);
@@ -251,12 +340,4 @@ input[type="text"] {
         margin-top: 25px;
     }
 
-    .flip-card {
-        width: 90%;
-        max-width: 350px;
-    }
-
-    .assetInfo {
-        min-width: 90%;
-    }
 }
