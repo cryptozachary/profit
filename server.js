@@ -8,8 +8,47 @@ const axios = require('axios');
 const app = express();
 const { createCanvas, loadImage } = require('canvas');
 const { reset } = require('nodemon');
+const mongoose = require('mongoose');
+const Settings = require('./models/settings');
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
+
+// Function to connect to the MongoDB database
+async function connectToDatabase() {
+    try {
+        await mongoose.connect(process.env.MONGO_DB_ATLAS, {
+            useNewUrlParser: true,
+        });
+        console.log('Connected to mongo db!');
+    } catch (error) {
+        console.error('Failed to connect to MongoDB:', error);
+    }
+}
+
+// Save settings to the database
+const saveSettings = async (settings) => {
+    const existingSettings = await Settings.findOne();
+    if (existingSettings) {
+        Object.assign(existingSettings, settings);
+        await existingSettings.save();
+    } else {
+        const newSettings = new Settings(settings);
+        await newSettings.save();
+    }
+};
+
+// Load settings from the database
+const loadSettings = async () => {
+    const settings = await Settings.findOne();
+    return settings || {
+        theme: 'default',
+        exchange: 'defaultExchange',
+        refreshRate: '30',
+        notifications: false,
+        customIndicator: 'defaultIndicator',
+        language: 'en'
+    };
+};
 
 //global variables for the asset being displayed
 const GLOBAL_VARIABLES = {
@@ -38,7 +77,6 @@ function resetConsensus() {
     GLOBAL_VARIABLES.neutral = "N/A";
 }
 
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '/frontend/public')));
@@ -46,6 +84,9 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '/frontend/views'));
 
 async function getSymbols(req, res, next) {
+
+    const settings = await loadSettings();
+    console.log('loadedSettingsGetSym:', settings)
     try {
         const response = await axios.get(`https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=binance`);
 
@@ -61,6 +102,19 @@ async function getSymbols(req, res, next) {
         res.status(500).send('Failed to retrieve symbols data.');
     }
 }
+
+app.post('/save-settings', async (req, res, next) => {
+    const settings = {
+        theme: req.query.theme,
+        exchange: req.query.exchange,
+        refreshRate: req.query.refreshRate,
+        notifications: req.query.notifications === 'true',
+        customIndicator: req.query.customIndicator,
+        language: req.query.language
+    };
+    await saveSettings(settings);
+    res.json({ message: 'Settings saved successfully', settings: settings });
+})
 
 
 app.post('/check-profitability', async (req, res) => {
@@ -302,17 +356,19 @@ app.post('/check-profitability', async (req, res) => {
 });
 
 // Add an endpoint for scanning a specific pair
-app.get('/scan/:asset/:currency', async (req, res) => {
+app.get('/scan/:asset/:currency/', async (req, res) => {
     const asset = req.params.asset;
     const currency = req.params.currency;
     const pair = `${asset}/${currency}`;
-    const interval = req.query.interval || '1h';
-    const period = parseInt(req.query.period) || 14;
+    const interval = req.query.interval
+    const period = parseInt(req.query.period)
+
+    console.log(`interval:`, interval, `period:`, period)
 
     try {
         const bullResult = await getBullFlagSignal(TAAPI_SECRET, 'binance', pair, interval, period);
         const bearResult = await getBearFlagSignal(TAAPI_SECRET, 'binance', pair, interval, period);
-        const pairData = await getPairData(asset, currency, interval);
+        const pairData = await getPairData(asset, currency, interval, period);
 
         // Log bull flag if detected
         if (bullResult.patternFound) {
@@ -344,10 +400,10 @@ app.get('/scan/:asset/:currency', async (req, res) => {
     }
 });
 
-async function getPairData(cryptoAsset, quoteCurrency, interval) {
+async function getPairData(cryptoAsset, quoteCurrency, interval, period) {
 
     try {
-        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${quoteCurrency}&interval=${interval}`);
+        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${quoteCurrency}&interval=${interval}&period=${period}`);
         console.log(`Asset Price: ${response.data.value}`);
         return {
             assetPrice: response.data.value,
@@ -688,6 +744,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
+    console.log('logfunction:', interval, period)
 
     let logAsset = false;
 
@@ -1292,11 +1349,14 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
 const PORT = process.env.PORT || 3000;
 const IP = '192.168.1.82'
 
-app.listen(PORT, () => {
-    console.log(`Server is running on http://${IP}:${PORT}`);
-});
+// Connect to the database and start the server
+connectToDatabase();
 
 app.get('/', getSymbols, (req, res) => {
     let symbols = req.symbols.sort()
     res.render('index', { symbols: symbols });
+});
+
+app.listen(PORT, () => {
+    console.log(`Server is running on http://${IP}:${PORT}`);
 });

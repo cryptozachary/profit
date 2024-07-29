@@ -51,14 +51,22 @@ function applySettings() {
     }
 }
 
-function saveSettings() {
+async function saveSettings() {
+
+    const theme = document.getElementById('theme').value;
+    const exchange = document.getElementById('exchange').value;
+    const refreshRate = document.getElementById('refreshRate').value;
+    const notifications = document.getElementById('notifications').checked;
+    const customIndicator = document.getElementById('customIndicator').value;
+    const language = document.getElementById('language').value
+
     const settings = {
-        theme: document.getElementById('theme').value,
-        exchange: document.getElementById('exchange').value,
-        refreshRate: document.getElementById('refreshRate').value,
-        notifications: document.getElementById('notifications').checked,
-        customIndicator: document.getElementById('customIndicator').value,
-        language: document.getElementById('language').value
+        theme: theme,
+        exchange: exchange,
+        refreshRate: refreshRate,
+        notifications: notifications,
+        customIndicator: customIndicator,
+        language: language
     };
 
     localStorage.setItem('cryptoAppSettings', JSON.stringify(settings));
@@ -66,17 +74,40 @@ function saveSettings() {
 
     document.querySelector('.flip-card').classList.remove('flipped');
     alert('Settings saved successfully!');
+
+    // Construct the query string
+    const queryString = new URLSearchParams(settings).toString();
+
+    try {
+        const response = await fetch(`/save-settings?${queryString}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        console.log(`thedata:`, data);
+    } catch (error) {
+        console.error('Error:', error);
+    }
 }
 
+async function giveExchange() {
+    const selectedExchange = document.getElementById('exchange').value;
+    try {
+        const response = await fetch(`/?exchange=${encodeURIComponent(selectedExchange)}`);
+        const data = await response.json();
+        console.log(data);
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
 // Wait for the DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', initializeApplication);
 
-function initializeApplication() {
+async function initializeApplication() {
     showLoadingScreen();
-    initializeUI();
-    setupEventListeners();
     loadSavedSettings();
     applySettings();
+    initializeUI();
+    setupEventListeners();
 }
 
 function initializeUI() {
@@ -154,8 +185,8 @@ function toggleAutoScan() {
         assetOption.disabled = true;
         formulaOption.disabled = true;
         checkBox.disabled = true;
-        intervalSelection.disabled = true;
-        periodSelection.disabled = true;
+        //intervalSelection.disabled = true;
+        //periodSelection.disabled = true;
         startAutoScanning();
     } else {
         toggleButton.textContent = 'Start Auto Scan';
@@ -164,8 +195,8 @@ function toggleAutoScan() {
         assetOption.disabled = false;
         formulaOption.disabled = false;
         checkBox.disabled = false;
-        intervalSelection.disabled = false;
-        periodSelection.disabled = false;
+        //intervalSelection.disabled = false;
+        //periodSelection.disabled = false;
         stopAutoScanning();
     }
 }
@@ -205,6 +236,7 @@ async function updateUIWithPairData(pair) {
         const [asset, currency] = pair.split('/');
         const interval = document.querySelector('#interval').value;
         const period = document.getElementById('period').value;
+        console.log(`Interval:`, interval, `Period:`, period)
         const response = await fetch(`/scan/${asset}/${currency}?interval=${interval}&period=${period}`);
 
         if (!response.ok) {
@@ -272,8 +304,6 @@ async function checkProfitability(data) {
     if (!asset2 || !pair) {
         return displayError("Please select a valid asset pair");
     }
-
-
     showLoadingScreen(); // Show the loading screen
 
     try {
@@ -286,8 +316,6 @@ async function checkProfitability(data) {
                 (response[3].patternData?.flagPattern ? 'Bear Flag Detected' : `No Flag Detected for: ${response[1].name}`);
             updateElementText('flagResult', resultText);
         }
-
-
 
     } catch (error) {
         console.error("Error:", error);
@@ -308,7 +336,7 @@ function buildRequestBody(asset2, formula, pair) {
         requestBody.interval = document.getElementById('interval').value;
         requestBody.period = document.getElementById('period').value;
     }
-
+    console.log(`requestbody:`, requestBody)
     return requestBody;
 }
 
@@ -332,7 +360,6 @@ async function processResponse(data) {
         const theDirection = (data[3] !== null && data[3] !== undefined) ? data[3].targets.predictedDirection : undefined;
         updateDisplays(data[1], data[3], prediction);
         updateResultMessage(prediction, data[0], theReasons, theDirection, data[1])
-
     } else {
         throw new Error('Unexpected server response format');
     }
