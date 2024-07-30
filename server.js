@@ -63,6 +63,7 @@ const GLOBAL_VARIABLES = {
     rise: "",
     fall: "",
     neutral: "",
+    exchange: "",
 }
 
 function clearObject(obj) {
@@ -88,11 +89,11 @@ async function getSymbols(req, res, next) {
     const settings = await loadSettings();
     console.log('loadedSettingsGetSym:', settings)
     try {
-        const response = await axios.get(`https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=binance`);
+        const response = await axios.get(`https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=${settings.exchange}`);
 
-        // Filter symbols to include only those ending with '/USDT' or '/USDC'
+        // Filter symbols to include only those ending with '/USDT' , '/USDC or /USD'
         const filteredSymbols = response.data.filter(symbol =>
-            symbol.endsWith('/USDT') || symbol.endsWith('/USDC')
+            symbol.endsWith('/USDT') || symbol.endsWith('/USDC') || symbol.endsWith('/USD')
         );
 
         req.symbols = filteredSymbols; // Assign the filtered data to req.symbols
@@ -119,6 +120,8 @@ app.post('/save-settings', async (req, res, next) => {
 
 app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
+
+    const settings = await loadSettings();
 
     if (formulaType !== "formula7" && formulaType !== "formula8") {
         clearObject(GLOBAL_VARIABLES);
