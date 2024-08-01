@@ -89,16 +89,6 @@ async function saveSettings() {
     }
 }
 
-async function giveExchange() {
-    const selectedExchange = document.getElementById('exchange').value;
-    try {
-        const response = await fetch(`/?exchange=${encodeURIComponent(selectedExchange)}`);
-        const data = await response.json();
-        console.log(data);
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
 // Wait for the DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', initializeApplication);
 

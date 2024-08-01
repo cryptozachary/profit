@@ -63,9 +63,12 @@ const GLOBAL_VARIABLES = {
     rise: "",
     fall: "",
     neutral: "",
-    exchange: "",
 }
 
+//global settings
+const GLOBAL_SETTINGS = {
+    exchange: "",
+}
 function clearObject(obj) {
     Object.keys(obj).forEach((key) => {
         obj[key] = '';
@@ -87,6 +90,8 @@ app.set('views', path.join(__dirname, '/frontend/views'));
 async function getSymbols(req, res, next) {
 
     const settings = await loadSettings();
+    GLOBAL_VARIABLES.exchange = settings.exchange;
+
     console.log('loadedSettingsGetSym:', settings)
     try {
         const response = await axios.get(`https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=${settings.exchange}`);
@@ -122,6 +127,7 @@ app.post('/check-profitability', async (req, res) => {
     const { cryptoAsset, formulaType, interval = '1h', period = 14, pair = 'USDT' } = req.body; // Defaulting to '1h' interval and period of 14 if not provided
 
     const settings = await loadSettings();
+    GLOBAL_SETTINGS.exchange = settings.exchange
 
     if (formulaType !== "formula7" && formulaType !== "formula8") {
         clearObject(GLOBAL_VARIABLES);
@@ -129,7 +135,7 @@ app.post('/check-profitability', async (req, res) => {
 
     // Grab asset price
     try {
-        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=1m`)
+        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=1m`)
         console.log(`Asset Price: ${response.data.value}`)
         GLOBAL_VARIABLES.assetPrice = response.data.value;
         GLOBAL_VARIABLES.name = cryptoAsset
@@ -153,7 +159,7 @@ app.post('/check-profitability', async (req, res) => {
         try {
             const bearFlagPattern = await getBearFlagSignal(
                 TAAPI_SECRET,
-                'binance',
+                `${GLOBAL_SETTINGS.exchange}`,
                 `${cryptoAsset}/${pair}`,
                 `${interval}`,
                 `${period}`
@@ -178,7 +184,7 @@ app.post('/check-profitability', async (req, res) => {
         try {
             const bullFlagPattern = await getBullFlagSignal(
                 TAAPI_SECRET,
-                'binance',
+                `${GLOBAL_SETTINGS.exchange}`,
                 `${cryptoAsset}/${pair}`,
                 `${interval}`,
                 `${period}`
@@ -204,16 +210,16 @@ app.post('/check-profitability', async (req, res) => {
         try {
             const results = await Promise.all([
 
-                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
-                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=30`),
-                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
-                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=10`),
-                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
-                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
-                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
-                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
-                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`),
-                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`),
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
+                axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=30`),
+                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
+                axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=10`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
+                axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
+                axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
+                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`),
+                axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`),
                 emaCrossoverFormula(cryptoAsset, interval, period)
             ]);
 
@@ -254,7 +260,7 @@ app.post('/check-profitability', async (req, res) => {
 
             const bullFlagPattern = await getBullFlagSignal(
                 TAAPI_SECRET,
-                'binance',
+                `${GLOBAL_SETTINGS.exchange}`,
                 `${cryptoAsset}/${pair}`,
                 `${interval}`,
                 `${period}`
@@ -262,7 +268,7 @@ app.post('/check-profitability', async (req, res) => {
 
             const bearFlagPattern = await getBearFlagSignal(
                 TAAPI_SECRET,
-                'binance',
+                `${GLOBAL_SETTINGS.exchange}`,
                 `${cryptoAsset}/${pair}`,
                 `${interval}`,
                 `${period}`
@@ -287,8 +293,8 @@ app.post('/check-profitability', async (req, res) => {
             console.log(`ema:`, predictions[5])
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
-            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection)
-            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }]);
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence)
+            return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }, { exchange: settings.exchange }]);
 
         } catch (error) {
             console.error(error);
@@ -297,7 +303,7 @@ app.post('/check-profitability', async (req, res) => {
     }
     let endpoint = '';
     const baseEndpoint = `https://api.taapi.io/`;
-    const commonParams = `secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}`;
+    const commonParams = `secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/USDT&interval=${interval}`;
 
     // ep is current and ep2 is historical data
     switch (formulaType) {
@@ -360,6 +366,7 @@ app.post('/check-profitability', async (req, res) => {
 
 // Add an endpoint for scanning a specific pair
 app.get('/scan/:asset/:currency/', async (req, res) => {
+
     const asset = req.params.asset;
     const currency = req.params.currency;
     const pair = `${asset}/${currency}`;
@@ -369,8 +376,8 @@ app.get('/scan/:asset/:currency/', async (req, res) => {
     console.log(`interval:`, interval, `period:`, period)
 
     try {
-        const bullResult = await getBullFlagSignal(TAAPI_SECRET, 'binance', pair, interval, period);
-        const bearResult = await getBearFlagSignal(TAAPI_SECRET, 'binance', pair, interval, period);
+        const bullResult = await getBullFlagSignal(TAAPI_SECRET, GLOBAL_SETTINGS.exchange, pair, interval, period);
+        const bearResult = await getBearFlagSignal(TAAPI_SECRET, GLOBAL_SETTINGS.exchange, pair, interval, period);
         const pairData = await getPairData(asset, currency, interval, period);
 
         // Log bull flag if detected
@@ -390,7 +397,7 @@ app.get('/scan/:asset/:currency/', async (req, res) => {
             ...pairData
         });
     } catch (error) {
-        console.error('Error in /scan/:asset/:currency:', error);
+        console.error('Error in /scan/:asset/:currency:', JSON.stringify(error));
         res.status(500).json({
             error: 'An error occurred while scanning',
             message: error.message,
@@ -406,7 +413,7 @@ app.get('/scan/:asset/:currency/', async (req, res) => {
 async function getPairData(cryptoAsset, quoteCurrency, interval, period) {
 
     try {
-        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/${quoteCurrency}&interval=${interval}&period=${period}`);
+        let response = await axios.get(`https://api.taapi.io/price?secret=${TAAPI_SECRET}&exchange=${GLOBAL_SETTINGS.exchange}&symbol=${cryptoAsset}/${quoteCurrency}&interval=${interval}&period=${period}`);
         console.log(`Asset Price: ${response.data.value}`);
         return {
             assetPrice: response.data.value,
@@ -743,19 +750,21 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
-async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2) {
+async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence) {
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
     console.log('logfunction:', interval, period)
 
     let logAsset = false;
+    let determineConfidence = false;
 
     logAsset = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2 ? true : false;
+    determineConfidence = confidence >= 80 ? true : false
 
-    console.log('Dir', direction)
+    console.log('Dir', direction, `Confidence:`, confidence)
 
-    if (logAsset) {
+    if (logAsset && determineConfidence) {
         const prediction = direction === "rise" ? "Bullish" : 'Bearish';
         const logEntry = `${timestamp} - ${pair} -${prediction}!- Current Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
 
@@ -899,7 +908,7 @@ function rsiFormula(currentRSI, historicalRSI) {
     // Get previous RSI value
     const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2] : rsiValue;
 
-    //console.log(`prev:`, historicalRSI, `CurrRsi:`, currentRSI);
+    //console.log(`historical:`, historicalRSI, `CurrRsi:`, currentRSI);
     //console.log(`Previous RSI value:`, previousRSI); // Debugging line to check the value
 
     // Calculate volatility adjustment
@@ -930,7 +939,6 @@ function rsiFormula(currentRSI, historicalRSI) {
     console.log(`Prev`, previousRSI);
     return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone', RSI: rsiValue };
 }
-
 
 function macdFormula(data, historicalData) {
     const macdLine = parseFloat(data.valueMACD);
@@ -1178,18 +1186,21 @@ function calculatePriceTrend(historicalData, periods = 5) {
 }
 
 async function emaCrossoverFormula(cryptoAsset, interval, period) {
-
+    console.log(`GB:`, GLOBAL_VARIABLES.exchange)
     const shortPeriod = Number(period);
     const longPeriod = Number(period) + 14;
 
-    const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${shortPeriod}`;
-    const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=binance&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${longPeriod}`;
+    const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=${GLOBAL_SETTINGS.exchange}&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${shortPeriod}`;
+    const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=${GLOBAL_SETTINGS.exchange}&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${longPeriod}`;
 
     try {
+
         const [shortEmaResponse, longEmaResponse] = await Promise.all([
             axios.get(shortEmaEndpoint),
             axios.get(longEmaEndpoint)
         ]);
+
+        if (!shortEmaEndpoint || !longEmaEndpoint) { return { direction: 'neutral', value: '00', reason: "No EMA Candles" }; }
 
         const currentShortEma = shortEmaResponse.data[0].value;
         const previousShortEma = shortEmaResponse.data[1].value;
@@ -1212,8 +1223,8 @@ async function emaCrossoverFormula(cryptoAsset, interval, period) {
         return { direction: 'neutral', value: '00', reason: "Unable to determine EMA" };
     } catch (error) {
         console.error(error);
-        throw new Error('Failed to retrieve EMA data (function).');
-        return
+        throw new Error('Failed to retrieve EMA data (function):', JSON.stringify(error));
+
     }
 }
 
