@@ -807,6 +807,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
+    const newTimeSTamp = formatTimestamp(timestamp);
     console.log('logfunction:', interval, period)
 
     let logAsset = false;
@@ -819,7 +820,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
 
     if (logAsset && determineConfidence) {
         const prediction = direction === "rise" ? "Bullish" : 'Bearish';
-        const logEntry = `${timestamp} - ${pair} -${prediction}!- Current Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
+        const logEntry = `${newTimeSTamp} - ${pair} -${prediction}!- Current Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
 
         try {
             // Create logs directory if it doesn't exist
@@ -834,6 +835,20 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
             console.error('Error logging bull signal:', error);
         }
     }
+}
+
+//format the time in the bullbear log
+function formatTimestamp(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+    });
 }
 
 //send log to server api
@@ -1320,6 +1335,11 @@ function evaluateAssetDirection(predictions) {
 
 function estimateTargetPrice(currentPrice, technicalData, patternData) {
 
+    function roundToDecimalPlaces(num, decimalPlaces) {
+        const factor = Math.pow(10, decimalPlaces);
+        return Math.round(num * factor) / factor;
+    }
+
     const { rsi, macd, bollingerBands, fibonacciRetracement, vosc } = technicalData;
     const { flagPattern, flagpoleHeight } = patternData;
 
@@ -1413,6 +1433,7 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
 
     // Calculate target price
     const targetPrice = parseFloat((currentPrice * (1 + priceChangePercentage / 100)).toFixed(8));
+    //const targetPrice = roundToDecimalPlaces(wholetargetPrice, 2)
 
     // Normalize confidence score to a 0-100 scale
     const normalizedConfidence = (confidenceScore / maxConfidenceScore) * 100;

@@ -113,6 +113,7 @@ async function openModal() {
 }
 
 async function deleteLogs() {
+    const modal = document.getElementById('logModal');
     const confirmation = confirm('Are you sure you want to delete all logs?');
     if (!confirmation) return;
 
@@ -126,16 +127,18 @@ async function deleteLogs() {
 
         if (response.ok) {
             alert('All logs deleted successfully');
-            // Optionally, refresh the logs or update the UI
         } else {
             console.error('Failed to delete logs');
         }
     } catch (error) {
         console.error('Error:', error);
     }
+
+    modal.style.display = 'none';
 }
 
 async function refreshLogEntries() {
+    showLoadingScreen(); // Show the loading screen
     try {
         const response = await fetch('/api/getLogs');
         const logs = await response.json();
@@ -143,7 +146,7 @@ async function refreshLogEntries() {
         const logEntriesContainer = document.getElementById('logEntries');
         const theLogEntry = document.getElementById('log-entry')
         logEntriesContainer.innerHTML = ''; // Clear any previous entries
-
+        hideLoadingScreen()
         if (logs.length === 0) {
             logEntriesContainer.innerHTML = '<p>No logs available.</p>';
         } else {
@@ -233,7 +236,7 @@ function toggleAutoScan() {
     isAutoScanning = !isAutoScanning;
 
     if (isAutoScanning) {
-        toggleButton.textContent = 'Stop Auto Scan';
+        toggleButton.textContent = 'Stop Scan';
         toggleButton.classList.add('active');
         intervalSelect.disabled = true;
         assetOption.disabled = true;
