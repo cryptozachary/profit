@@ -94,29 +94,14 @@ async function openModal() {
     const modal = document.getElementById('logModal');
     modal.style.display = 'block';
 
-    // Fetch logs from the server
-    try {
-        const response = await fetch('/api/logEntries');
-        const logs = await response.json();
-
-        // Populate the modal with the log entries
-        const logEntriesContainer = document.getElementById('logEntries');
-        logEntriesContainer.innerHTML = ''; // Clear any previous entries
-
-        logs.forEach(log => {
-            const logEntry = document.createElement('p');
-            logEntry.textContent = log.logEntry;
-            logEntriesContainer.appendChild(logEntry);
-        });
-    } catch (error) {
-        console.error('Error fetching log entries:', error);
-    }
-
     // Close the modal when the close button is clicked
     document.querySelector('.close').addEventListener('click', () => {
         const modal = document.getElementById('logModal');
         modal.style.display = 'none';
     });
+
+    // Refresh logs in the modal
+    await refreshLogEntries();
 
     // Close the modal when clicking outside of the modal content
     window.addEventListener('click', (event) => {
@@ -147,6 +132,30 @@ async function deleteLogs() {
         }
     } catch (error) {
         console.error('Error:', error);
+    }
+}
+
+async function refreshLogEntries() {
+    try {
+        const response = await fetch('/api/getLogs');
+        const logs = await response.json();
+
+        const logEntriesContainer = document.getElementById('logEntries');
+        const theLogEntry = document.getElementById('log-entry')
+        logEntriesContainer.innerHTML = ''; // Clear any previous entries
+
+        if (logs.length === 0) {
+            logEntriesContainer.innerHTML = '<p>No logs available.</p>';
+        } else {
+            logs.forEach(log => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.textContent = log.logEntry;
+                logEntriesContainer.appendChild(logEntry);
+            });
+        }
+    } catch (error) {
+        console.error('Error fetching log entries:', error);
     }
 }
 
@@ -218,6 +227,7 @@ function toggleAutoScan() {
     const checkBox = document.getElementById('checkbox');
     const intervalSelection = document.getElementById('interval');
     const periodSelection = document.getElementById('period');
+    const checkProfitabilityButton = document.getElementById('checkProfitability')
 
 
     isAutoScanning = !isAutoScanning;
@@ -228,6 +238,7 @@ function toggleAutoScan() {
         intervalSelect.disabled = true;
         assetOption.disabled = true;
         formulaOption.disabled = true;
+        checkProfitabilityButton.disabled = true;
         //checkBox.disabled = true;
         //intervalSelection.disabled = true;
         //periodSelection.disabled = true;
@@ -238,6 +249,7 @@ function toggleAutoScan() {
         intervalSelect.disabled = false;
         assetOption.disabled = false;
         formulaOption.disabled = false;
+        checkProfitabilityButton.disabled = false;
         //checkBox.disabled = false;
         //intervalSelection.disabled = false;
         //periodSelection.disabled = false;

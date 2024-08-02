@@ -27,12 +27,9 @@
             </div>
             <h2 id="log-title">Log Information</h2>
             <div id="logEntries"></div>
-            <% logs.forEach(log=> { %>
-                <div class="log-entry">
-                    <%= log.logEntry %>
-                </div>
-                <% }) %>
         </div>
+
+    </div>
     </div>
     <div class="assetInfo">
         <p><strong>Name:</strong> <span id="assetName"></span></p>
@@ -97,9 +94,9 @@
                     <div class="scan-controls">
                         <button id="toggleAutoScan" class="toggle-button">Auto Scan</button>
                         <select id="scanInterval">
-                            <option value="10000">10 seconds</option>
                             <option value="15000" selected>15 seconds</option>
                             <option value="20000">20 seconds</option>
+                            <option value="25000">25 seconds</option>
                         </select>
                         <button id="seeLogs" class="log-button">Logs</button>
                     </div>

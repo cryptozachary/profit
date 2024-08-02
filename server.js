@@ -133,6 +133,7 @@ app.delete('/api/logEntries', async (req, res) => {
         res.status(500).send('Internal server error');
     }
 });
+
 //endpoints
 app.post('/save-settings', async (req, res, next) => {
     const settings = {
@@ -452,6 +453,15 @@ app.post('/api/logEntry', async (req, res) => {
     }
 });
 
+app.get('/api/getLogs', async (req, res) => {
+    try {
+        const logs = await BullBear.find().exec();
+        res.json(logs)
+    } catch (error) {
+        console.error('Error loading bullbear logs:', error);
+        res.status(500).send('Internal server error');
+    }
+});
 
 async function getPairData(cryptoAsset, quoteCurrency, interval, period) {
 
@@ -1424,10 +1434,10 @@ const IP = '192.168.1.82'
 // Connect to the database and start the server
 connectToDatabase();
 
-app.get('/', getSymbols, loadBullBearLogs, (req, res) => {
+app.get('/', getSymbols, (req, res) => {
     let symbols = req.symbols.sort()
-    let theLogs = req.bullBearLogs
-    res.render('index', { symbols: symbols, logs: theLogs });
+    //let theLogs = req.bullBearLogs
+    res.render('index', { symbols: symbols });
 });
 
 app.listen(PORT, () => {
