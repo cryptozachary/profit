@@ -10,6 +10,7 @@ const { createCanvas, loadImage } = require('canvas');
 const { reset } = require('nodemon');
 const mongoose = require('mongoose');
 const Settings = require('./models/settings');
+const BullBear = require('./models/bullbearlog');
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
 
@@ -87,6 +88,7 @@ app.use(express.static(path.join(__dirname, '/frontend/public')));
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, '/frontend/views'));
 
+//middleware functions
 async function getSymbols(req, res, next) {
 
     const settings = await loadSettings();
@@ -109,6 +111,29 @@ async function getSymbols(req, res, next) {
     }
 }
 
+//load logs
+async function loadBullBearLogs(req, res, next) {
+    try {
+        const logs = await BullBear.find().exec();
+        req.bullBearLogs = logs;
+        next();
+    } catch (error) {
+        console.error('Error loading bullbear logs:', error);
+        res.status(500).send('Internal server error');
+    }
+}
+
+// Route to delete all log entries
+app.delete('/api/logEntries', async (req, res) => {
+    try {
+        await BullBear.deleteMany({});
+        res.status(200).send('All logs deleted successfully');
+    } catch (error) {
+        console.error('Error deleting logs:', error);
+        res.status(500).send('Internal server error');
+    }
+});
+//endpoints
 app.post('/save-settings', async (req, res, next) => {
     const settings = {
         theme: req.query.theme,
@@ -397,7 +422,7 @@ app.get('/scan/:asset/:currency/', async (req, res) => {
             ...pairData
         });
     } catch (error) {
-        console.error('Error in /scan/:asset/:currency:', JSON.stringify(error));
+        console.error('Error in /scan/:asset/:currency:', error);
         res.status(500).json({
             error: 'An error occurred while scanning',
             message: error.message,
@@ -409,6 +434,24 @@ app.get('/scan/:asset/:currency/', async (req, res) => {
         });
     }
 });
+
+app.post('/api/logEntry', async (req, res) => {
+    const { logEntry } = req.body;
+
+    if (!logEntry) {
+        return res.status(400).send('Log entry is required');
+    }
+
+    try {
+        const newLog = new BullBear({ logEntry });
+        await newLog.save();
+        res.status(201).send('Log entry saved successfully');
+    } catch (error) {
+        console.error('Error saving log entry:', error);
+        res.status(500).send('Internal server error');
+    }
+});
+
 
 async function getPairData(cryptoAsset, quoteCurrency, interval, period) {
 
@@ -760,7 +803,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     let determineConfidence = false;
 
     logAsset = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2 ? true : false;
-    determineConfidence = confidence >= 80 ? true : false
+    determineConfidence = confidence >= 40 ? true : false
 
     console.log('Dir', direction, `Confidence:`, confidence)
 
@@ -771,13 +814,28 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
         try {
             // Create logs directory if it doesn't exist
             await fs.mkdir(logDir, { recursive: true });
-
             // Append to the log file
             await fs.appendFile(logFile, logEntry);
+            //send log entry to server
+            sendLogEntry(logEntry, prediction, pair)
+
             console.log(`${prediction} signal logged for ${pair}`);
         } catch (error) {
             console.error('Error logging bull signal:', error);
         }
+    }
+}
+
+//send log to server api
+async function sendLogEntry(logEntry, prediction, pair) {
+    const logDocument = { logEntry: logEntry };
+    try {
+        // Save the log entry to MongoDB
+        const newLog = new BullBear(logDocument);
+        await newLog.save();
+        console.log(`${prediction} signal logged for ${pair}`);
+    } catch (error) {
+        console.error('Error logging bull signal:', error);
     }
 }
 
@@ -1366,9 +1424,10 @@ const IP = '192.168.1.82'
 // Connect to the database and start the server
 connectToDatabase();
 
-app.get('/', getSymbols, (req, res) => {
+app.get('/', getSymbols, loadBullBearLogs, (req, res) => {
     let symbols = req.symbols.sort()
-    res.render('index', { symbols: symbols });
+    let theLogs = req.bullBearLogs
+    res.render('index', { symbols: symbols, logs: theLogs });
 });
 
 app.listen(PORT, () => {

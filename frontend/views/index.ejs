@@ -18,6 +18,22 @@
             <p>Loading...</p>
         </div>
     </div>
+    <!-- Modal -->
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <div id="log-erase-btn">
+                <button id="erase-logs" class="eraseLogs">Erase Logs</button>
+            </div>
+            <h2 id="log-title">Log Information</h2>
+            <div id="logEntries"></div>
+            <% logs.forEach(log=> { %>
+                <div class="log-entry">
+                    <%= log.logEntry %>
+                </div>
+                <% }) %>
+        </div>
+    </div>
     <div class="assetInfo">
         <p><strong>Name:</strong> <span id="assetName"></span></p>
         <p><strong>Price:</strong> <span id="assetPriceDisplay"></span></p>
@@ -79,12 +95,13 @@
                         <input id="checkbox" type="checkbox" name="myCheckbox" value="checkboxValue">
                     </div>
                     <div class="scan-controls">
-                        <button id="toggleAutoScan" class="toggle-button">Start Auto Scan</button>
+                        <button id="toggleAutoScan" class="toggle-button">Auto Scan</button>
                         <select id="scanInterval">
                             <option value="10000">10 seconds</option>
                             <option value="15000" selected>15 seconds</option>
                             <option value="20000">20 seconds</option>
                         </select>
+                        <button id="seeLogs" class="log-button">Logs</button>
                     </div>
                     <div id="flagResult"></div>
                     <button id="checkProfitability">Bullish or Bearish?</button>

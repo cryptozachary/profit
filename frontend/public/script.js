@@ -89,6 +89,67 @@ async function saveSettings() {
     }
 }
 
+async function openModal() {
+    // Display the modal
+    const modal = document.getElementById('logModal');
+    modal.style.display = 'block';
+
+    // Fetch logs from the server
+    try {
+        const response = await fetch('/api/logEntries');
+        const logs = await response.json();
+
+        // Populate the modal with the log entries
+        const logEntriesContainer = document.getElementById('logEntries');
+        logEntriesContainer.innerHTML = ''; // Clear any previous entries
+
+        logs.forEach(log => {
+            const logEntry = document.createElement('p');
+            logEntry.textContent = log.logEntry;
+            logEntriesContainer.appendChild(logEntry);
+        });
+    } catch (error) {
+        console.error('Error fetching log entries:', error);
+    }
+
+    // Close the modal when the close button is clicked
+    document.querySelector('.close').addEventListener('click', () => {
+        const modal = document.getElementById('logModal');
+        modal.style.display = 'none';
+    });
+
+    // Close the modal when clicking outside of the modal content
+    window.addEventListener('click', (event) => {
+        const modal = document.getElementById('logModal');
+        if (event.target == modal) {
+            modal.style.display = 'none';
+        }
+    })
+}
+
+async function deleteLogs() {
+    const confirmation = confirm('Are you sure you want to delete all logs?');
+    if (!confirmation) return;
+
+    try {
+        const response = await fetch('/api/logEntries', {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (response.ok) {
+            alert('All logs deleted successfully');
+            // Optionally, refresh the logs or update the UI
+        } else {
+            console.error('Failed to delete logs');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
 // Wait for the DOM to be fully loaded before initializing
 document.addEventListener('DOMContentLoaded', initializeApplication);
 
@@ -121,35 +182,28 @@ function hideLoadingScreen() {
 
 function setupEventListeners() {
     const toggleButton = document.getElementById('toggleAutoScan');
-    toggleButton?.addEventListener('click', toggleAutoScan);
     const flipCard = document.querySelector('.flip-card');
     const settingsButton = document.getElementById('settingsButton');
     const saveSettingsButton = document.getElementById('saveSettings');
     const themeSelect = document.getElementById('theme');
+    const eraseLogButton = document.getElementById('erase-logs')
 
-    const exchangeSelect = document.getElementById('exchange');
-    const refreshRateSelect = document.getElementById('refreshRate');
-    const notificationsCheckbox = document.getElementById('notifications');
-    const customIndicatorInput = document.getElementById('customIndicator');
-    const languageSelect = document.getElementById('language');
-
-
+    saveSettingsButton.addEventListener('click', saveSettings);
+    toggleButton?.addEventListener('click', toggleAutoScan);
+    eraseLogButton.addEventListener('click', deleteLogs);
     document.getElementById('checkProfitability')?.addEventListener('click', checkProfitability);
     document.getElementById('checkbox')?.addEventListener('change', toggleParameterInputs);
     document.getElementById('chooseAsset')?.addEventListener('change', updateCurrentPairIndex);
+    document.getElementById('seeLogs').addEventListener('click', openModal);
 
     settingsButton.addEventListener('click', function () {
         flipCard.classList.toggle('flipped');
     });
 
-    saveSettingsButton.addEventListener('click', saveSettings);
-
     themeSelect.addEventListener('change', function () {
         applyTheme(this.value);
     });
 };
-
-
 
 function updateCurrentPairIndex() {
     currentPairIndex = document.getElementById('chooseAsset').selectedIndex;
@@ -174,17 +228,17 @@ function toggleAutoScan() {
         intervalSelect.disabled = true;
         assetOption.disabled = true;
         formulaOption.disabled = true;
-        checkBox.disabled = true;
+        //checkBox.disabled = true;
         //intervalSelection.disabled = true;
         //periodSelection.disabled = true;
         startAutoScanning();
     } else {
-        toggleButton.textContent = 'Start Auto Scan';
+        toggleButton.textContent = 'Auto Scan';
         toggleButton.classList.remove('active');
         intervalSelect.disabled = false;
         assetOption.disabled = false;
         formulaOption.disabled = false;
-        checkBox.disabled = false;
+        //checkBox.disabled = false;
         //intervalSelection.disabled = false;
         //periodSelection.disabled = false;
         stopAutoScanning();
