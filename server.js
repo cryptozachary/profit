@@ -1,5 +1,6 @@
 // server.js
 // Load environment variables
+const nodemailer = require('nodemailer')
 const fs = require('fs').promises;
 const path = require('path');
 require('dotenv').config();
@@ -26,6 +27,30 @@ async function connectToDatabase() {
     }
 }
 
+//function to send email when log is found
+const sendEmail = async (fromEmail, name, subject, message) => {
+    const transporter = nodemailer.createTransport({
+        host: 'smtp.hostinger.com', // enter your host name
+        port: 465,
+        secure: true,
+        auth: {
+            user: process.env.EZEMAIL,
+            pass: process.env.EZPASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false
+        }
+    });
+    await transporter.sendMail({
+        from: 'zach@ezmanagers.com',
+        to: 'zachlipscomb86@gmail.com',
+        cc: fromEmail,
+        subject: subject,
+        text: `From: ${name} - ${fromEmail}, 
+
+        ${message}`
+    });
+}
 // Save settings to the database
 const saveSettings = async (settings) => {
     const existingSettings = await Settings.findOne();
@@ -69,6 +94,7 @@ const GLOBAL_VARIABLES = {
 //global settings
 const GLOBAL_SETTINGS = {
     exchange: "",
+    notifications: "",
 }
 function clearObject(obj) {
     Object.keys(obj).forEach((key) => {
@@ -154,6 +180,7 @@ app.post('/check-profitability', async (req, res) => {
 
     const settings = await loadSettings();
     GLOBAL_SETTINGS.exchange = settings.exchange
+    GLOBAL_SETTINGS.notifications = settings.notifications
 
     if (formulaType !== "formula7" && formulaType !== "formula8") {
         clearObject(GLOBAL_VARIABLES);
@@ -319,7 +346,7 @@ app.post('/check-profitability', async (req, res) => {
             console.log(`ema:`, predictions[5])
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
-            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence)
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence, GLOBAL_SETTINGS.notifications)
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }, { exchange: settings.exchange }]);
 
         } catch (error) {
@@ -803,7 +830,7 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
-async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence) {
+async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence, notifications) {
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
@@ -814,7 +841,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     let determineConfidence = false;
 
     logAsset = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2 ? true : false;
-    determineConfidence = confidence >= 40 ? true : false
+    determineConfidence = confidence >= 80 ? true : false
 
     console.log('Dir', direction, `Confidence:`, confidence)
 
@@ -827,8 +854,13 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
             await fs.mkdir(logDir, { recursive: true });
             // Append to the log file
             await fs.appendFile(logFile, logEntry);
+
             //send log entry to server
             sendLogEntry(logEntry, prediction, pair)
+
+            //send email of the log
+            if (notifications) { sendEmail('Know Your Strats', 'Zachary', `New log for ${pair}`, logEntry) }
+
 
             console.log(`${prediction} signal logged for ${pair}`);
         } catch (error) {
