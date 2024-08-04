@@ -149,6 +149,8 @@ async function loadBullBearLogs(req, res, next) {
     }
 }
 
+//endpoints
+
 // Route to delete all log entries
 app.delete('/api/logEntries', async (req, res) => {
     try {
@@ -160,7 +162,6 @@ app.delete('/api/logEntries', async (req, res) => {
     }
 });
 
-//endpoints
 app.post('/save-settings', async (req, res, next) => {
     const settings = {
         theme: req.query.theme,
