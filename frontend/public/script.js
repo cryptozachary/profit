@@ -114,6 +114,10 @@ async function openModal() {
 
 async function deleteLogs() {
     const modal = document.getElementById('logModal');
+    const logEntriesContainer = document.getElementById('logEntries');
+
+    if (logEntriesContainer.innerHTML == '<p>No logs available.</p>') { return alert('No logs exist.') }
+
     const confirmation = confirm('Are you sure you want to delete all logs?');
     if (!confirmation) return;
 
