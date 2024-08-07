@@ -21,15 +21,27 @@
     <!-- Modal -->
     <div id="logModal" class="modal">
         <div class="modal-content">
-            <span class="close">&times;</span>
+            <span id="span1" class="close">&times;</span>
             <div id="log-erase-btn">
-                <button id="erase-logs" class="eraseLogs">Erase Logs</button>
+                <button id="erase-logs" class="eraseLogs eraseLogs2">Erase Logs</button>
             </div>
             <h2 id="log-title">Log Information</h2>
             <div id="logEntries"></div>
         </div>
 
-    </div>
+        <!-- Modal2 -->
+        <div id="logModal2" class="modal">
+            <div class="modal-content">
+                <span id="span2" class="close">&times;</span>
+                <h2 id="log-title2">Are you sure you want to delete all logs?</h2>
+                <div id="log-confirm-btns">
+                    <button id="confirm-erase" class="eraseLogs">Yes</button>
+                    <button id="confirm-cancel" class="cancelLogs">Cancel</button>
+                </div>
+
+            </div>
+
+        </div>
     </div>
     <div class="assetInfo">
         <p><strong>Name:</strong> <span id="assetName"></span></p>

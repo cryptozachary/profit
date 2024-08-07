@@ -88,38 +88,105 @@ async function saveSettings() {
         console.error('Error:', error);
     }
 }
+async function refreshLogEntries() {
+    showLoadingScreen(); // Show the loading screen
+    try {
+        const response = await fetch('/api/getLogs');
+        const logs = await response.json();
+        const eraseBtn = document.getElementById('erase-logs');
+        const logEntriesContainer = document.getElementById('logEntries');
+        logEntriesContainer.innerHTML = ''; // Clear any previous entries
+        hideLoadingScreen()
+        if (logs.length === 0) {
+            logEntriesContainer.innerHTML = '<p>No logs available.</p>';
+            eraseBtn.removeAttribute('class'); // Remove all classes
+            eraseBtn.disabled = true;
+            eraseBtn.classList.add('btnDisabled', 'no-pointer');
+        } else {
+            logs.forEach(log => {
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.textContent = log.logEntry;
+                logEntriesContainer.appendChild(logEntry);
+            });
+            eraseBtn.disabled = false;
+            eraseBtn.classList.remove('btnDisabled', 'no-pointer');
+            eraseBtn.classList.add('eraseLogs', 'eraseLogs2');
+
+        }
+    } catch (error) {
+        console.error('Error fetching log entries:', error);
+    }
+}
 
 async function openModal() {
     // Display the modal
     const modal = document.getElementById('logModal');
     modal.style.display = 'block';
 
+    const logEntriesContainer = document.getElementById('logEntries');
+
+
     // Close the modal when the close button is clicked
-    document.querySelector('.close').addEventListener('click', () => {
-        const modal = document.getElementById('logModal');
-        modal.style.display = 'none';
-    });
+    document.querySelector('.close').addEventListener('click', closeModal);
 
     // Refresh logs in the modal
     await refreshLogEntries();
 
     // Close the modal when clicking outside of the modal content
-    window.addEventListener('click', (event) => {
-        const modal = document.getElementById('logModal');
-        if (event.target == modal) {
-            modal.style.display = 'none';
-        }
-    })
+    window.addEventListener('click', outsideClickHandler);
+}
+
+function closeModal() {
+    const modal = document.getElementById('logModal');
+    modal.style.display = 'none';
+    window.removeEventListener('click', outsideClickHandler);
+}
+
+function outsideClickHandler(event) {
+    const modal = document.getElementById('logModal');
+    if (event.target === modal) {
+        closeModal();
+    }
+}
+
+async function openModalConfirm() {
+    const modal = document.getElementById('logModal2');
+    const cancelBtn = document.getElementById('confirm-cancel');
+    const closeBtn = document.getElementById('span2');
+    const logEntriesContainer = document.getElementById('logEntries');
+
+    if (logEntriesContainer.innerHTML === '<p>No logs available.</p>') {
+        return;
+    }
+
+    modal.style.display = 'block';
+
+    // Close the modal when the cancel button is clicked
+    cancelBtn.addEventListener('click', closeModalConfirm);
+    closeBtn.addEventListener('click', closeModalConfirm);
+
+    // Close the modal when clicking outside of the modal content
+    window.addEventListener('click', outsideClickConfirmHandler);
+}
+
+function closeModalConfirm() {
+    const modal = document.getElementById('logModal2');
+    modal.style.display = 'none';
+    window.removeEventListener('click', outsideClickConfirmHandler);
+}
+
+function outsideClickConfirmHandler(event) {
+    const modal = document.getElementById('logModal2');
+    if (event.target === modal) {
+        closeModalConfirm();
+    }
 }
 
 async function deleteLogs() {
-    const modal = document.getElementById('logModal');
-    const logEntriesContainer = document.getElementById('logEntries');
-
-    if (logEntriesContainer.innerHTML == '<p>No logs available.</p>') { return alert('No logs exist.') }
-
-    const confirmation = confirm('Are you sure you want to delete all logs?');
-    if (!confirmation) return;
+    const modal = document.getElementById('logModal2');
+    const modal2 = document.getElementById('logModal');
+    const logTitle = document.getElementById('log-title2');
 
     try {
         const response = await fetch('/api/logEntries', {
@@ -130,40 +197,18 @@ async function deleteLogs() {
         });
 
         if (response.ok) {
-            alert('All logs deleted successfully');
+            logTitle.textContent = 'ALL LOGS DELETED'
         } else {
             console.error('Failed to delete logs');
         }
     } catch (error) {
         console.error('Error:', error);
     }
-
-    modal.style.display = 'none';
-}
-
-async function refreshLogEntries() {
-    showLoadingScreen(); // Show the loading screen
-    try {
-        const response = await fetch('/api/getLogs');
-        const logs = await response.json();
-
-        const logEntriesContainer = document.getElementById('logEntries');
-        const theLogEntry = document.getElementById('log-entry')
-        logEntriesContainer.innerHTML = ''; // Clear any previous entries
-        hideLoadingScreen()
-        if (logs.length === 0) {
-            logEntriesContainer.innerHTML = '<p>No logs available.</p>';
-        } else {
-            logs.forEach(log => {
-                const logEntry = document.createElement('div');
-                logEntry.className = 'log-entry';
-                logEntry.textContent = log.logEntry;
-                logEntriesContainer.appendChild(logEntry);
-            });
-        }
-    } catch (error) {
-        console.error('Error fetching log entries:', error);
-    }
+    await refreshLogEntries()
+    setTimeout(() => {
+        modal.style.display = 'none';
+        modal2.style.display = 'none';
+    }, 3000);
 }
 
 // Wait for the DOM to be fully loaded before initializing
@@ -203,10 +248,14 @@ function setupEventListeners() {
     const saveSettingsButton = document.getElementById('saveSettings');
     const themeSelect = document.getElementById('theme');
     const eraseLogButton = document.getElementById('erase-logs')
+    const confirmErase = document.getElementById('confirm-erase')
+    const confirmCancel = document.getElementById('confirm-cancel')
 
     saveSettingsButton.addEventListener('click', saveSettings);
     toggleButton?.addEventListener('click', toggleAutoScan);
-    eraseLogButton.addEventListener('click', deleteLogs);
+    eraseLogButton.addEventListener('click', openModalConfirm);
+    confirmErase.addEventListener('click', deleteLogs);
+
     document.getElementById('checkProfitability')?.addEventListener('click', checkProfitability);
     document.getElementById('checkbox')?.addEventListener('change', toggleParameterInputs);
     document.getElementById('chooseAsset')?.addEventListener('change', updateCurrentPairIndex);

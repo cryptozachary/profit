@@ -353,6 +353,14 @@ body.dark-theme {
     font-weight: bold;
 }
 
+#confirm-erase:hover,
+#confirm-cancel:hover,
+.eraseLogs2:hover,
+#seeLogs:hover,
+#checkProfitability:hover {
+    background-color: #166396;
+}
+
 .close:hover,
 .close:focus {
     color: black;
@@ -369,6 +377,17 @@ body.dark-theme {
     justify-content: space-evenly;
 }
 
+.btnDisabled {
+    background-color: #cecece;
+}
+
+.no-pointer {
+    pointer-events: none;
+    cursor: default;
+    /* or cursor: not-allowed; */
+}
+
+#log-title2,
 #log-title {
     margin-top: 10px;
     margin-bottom: 10px;
@@ -379,6 +398,11 @@ body.dark-theme {
     border: 1px solid #1e3c72;
     border-radius: 5px;
     padding: 5px;
+}
+
+#log-confirm-btns {
+    display: flex;
+    flex-direction: column;
 }
 
 .no-logs {
