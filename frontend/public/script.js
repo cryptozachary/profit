@@ -151,14 +151,11 @@ function outsideClickHandler(event) {
 }
 
 async function openModalConfirm() {
+    closeModal()
     const modal = document.getElementById('logModal2');
     const cancelBtn = document.getElementById('confirm-cancel');
     const closeBtn = document.getElementById('span2');
     const logEntriesContainer = document.getElementById('logEntries');
-
-    if (logEntriesContainer.innerHTML === '<p>No logs available.</p>') {
-        return;
-    }
 
     modal.style.display = 'block';
 
@@ -187,6 +184,8 @@ async function deleteLogs() {
     const modal = document.getElementById('logModal2');
     const modal2 = document.getElementById('logModal');
     const logTitle = document.getElementById('log-title2');
+    const confirmBtn = document.getElementById('confirm-erase')
+    const cancelBtn = document.getElementById('confirm-cancel')
 
     try {
         const response = await fetch('/api/logEntries', {
@@ -195,19 +194,24 @@ async function deleteLogs() {
                 'Content-Type': 'application/json'
             }
         });
-
+        // update header to show logs have been deleted
         if (response.ok) {
             logTitle.textContent = 'ALL LOGS DELETED'
+            confirmBtn.style.display = 'None'
+            cancelBtn.style.display = 'None'
         } else {
             console.error('Failed to delete logs');
         }
     } catch (error) {
         console.error('Error:', error);
     }
-    await refreshLogEntries()
+
+    // reload the logs then close the modals
     setTimeout(() => {
-        modal.style.display = 'none';
-        modal2.style.display = 'none';
+        closeModalConfirm()
+        confirmBtn.style.display = 'block'
+        cancelBtn.style.display = 'block'
+        logTitle.textContent = 'Are you sure you want to delete all logs?'
     }, 3000);
 }
 
