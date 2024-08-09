@@ -5,7 +5,7 @@ const settingsSchema = new mongoose.Schema({
     exchange: { type: String, required: true },
     refreshRate: { type: String, required: true },
     notifications: { type: Boolean, required: false },
-    customIndicator: { type: String, required: false },
+    customIndicator: { type: String, required: true },
     language: { type: String, required: true }
 });
 

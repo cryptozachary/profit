@@ -28,7 +28,7 @@ async function connectToDatabase() {
 }
 
 //function to send email when log is found
-const sendEmail = async (fromEmail, name, subject, message) => {
+const sendEmail = async (fromEmail, name, subject, message, notify) => {
     const transporter = nodemailer.createTransport({
         host: 'smtp.hostinger.com', // enter your host name
         port: 465,
@@ -43,7 +43,7 @@ const sendEmail = async (fromEmail, name, subject, message) => {
     });
     await transporter.sendMail({
         from: 'zach@ezmanagers.com',
-        to: 'zachlipscomb86@gmail.com',
+        to: notify,
         cc: fromEmail,
         subject: subject,
         text: `From: ${name} - ${fromEmail}, 
@@ -95,6 +95,7 @@ const GLOBAL_VARIABLES = {
 const GLOBAL_SETTINGS = {
     exchange: "",
     notifications: "",
+    notifyEmail: "",
 }
 function clearObject(obj) {
     Object.keys(obj).forEach((key) => {
@@ -182,6 +183,7 @@ app.post('/check-profitability', async (req, res) => {
     const settings = await loadSettings();
     GLOBAL_SETTINGS.exchange = settings.exchange
     GLOBAL_SETTINGS.notifications = settings.notifications
+    GLOBAL_SETTINGS.notifyEmail = settings.customIndicator
 
     if (formulaType !== "formula7" && formulaType !== "formula8") {
         clearObject(GLOBAL_VARIABLES);
@@ -347,7 +349,9 @@ app.post('/check-profitability', async (req, res) => {
             console.log(`ema:`, predictions[5])
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
-            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence, GLOBAL_SETTINGS.notifications)
+
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence, GLOBAL_SETTINGS.notifications, GLOBAL_SETTINGS.notifyEmail)
+
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }, { exchange: settings.exchange }]);
 
         } catch (error) {
@@ -831,7 +835,7 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
-async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence, notifications) {
+async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence, notifications, notifyEmail) {
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
@@ -860,7 +864,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
             sendLogEntry(logEntry, prediction, pair)
 
             //send email of the log
-            if (notifications) { sendEmail('Know Your Strats', 'Zachary', `New log for ${pair}`, logEntry) }
+            if (notifications) { sendEmail('Know Your Strats', 'Zachary', `New log for ${pair}`, logEntry, notifyEmail) }
 
 
             console.log(`${prediction} signal logged for ${pair}`);

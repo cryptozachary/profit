@@ -53,6 +53,7 @@ footer {
     flex-wrap: wrap;
     gap: 5px;
     justify-content: center;
+    align-items: center;
 }
 
 .flip-card {
@@ -157,10 +158,6 @@ button {
 #checkProfitability {
     display: flex;
     justify-content: center;
-}
-
-input[type="text"] {
-    text-transform: uppercase;
 }
 
 #formulaParameters {
