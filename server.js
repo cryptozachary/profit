@@ -846,7 +846,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     let determineConfidence = false;
 
     logAsset = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2 ? true : false;
-    determineConfidence = confidence >= 40 ? true : false
+    determineConfidence = confidence >= 80 ? true : false
 
     console.log('Dir', direction, `Confidence:`, confidence)
 

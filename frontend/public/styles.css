@@ -103,6 +103,7 @@ footer {
     justify-content: center;
     align-items: center;
     min-height: 392.94px;
+    padding: 2px;
 }
 
 .settings-button {
@@ -127,6 +128,13 @@ footer {
 
 .settings-button:active {
     transform: translateY(-25px);
+}
+
+#note {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
 }
 
 button {

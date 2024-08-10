@@ -136,17 +136,17 @@
                         </select>
                     </div>
                     <div class="settings-group">
-                        <label for="refreshRate">Auto-refresh Rate:</label>
+                        <label for="refreshRate">Auto-Scan Type:</label>
                         <select id="refreshRate">
-                            <option value="5">5 seconds</option>
-                            <option value="10">10 seconds</option>
-                            <option value="30">30 seconds</option>
-                            <option value="60">1 minute</option>
+                            <option value="cycleThroughPairs">Cycle Through Pairs</option>
+                            <option value="intervalScan">Pair at Interval</option>
                         </select>
                     </div>
                     <div class="settings-group">
-                        <label for="notifications">Enable Notifications:</label>
-                        <input type="checkbox" id="notifications">
+                        <div id="note">
+                            <label for="notifications">Enable Email Notifications:</label>
+                            <input type="checkbox" id="notifications">
+                        </div>
                     </div>
                     <div class="settings-group">
                         <label for="customIndicator">Email:</label>

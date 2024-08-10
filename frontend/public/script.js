@@ -72,9 +72,6 @@ async function saveSettings() {
     localStorage.setItem('cryptoAppSettings', JSON.stringify(settings));
     applyTheme(settings.theme);
 
-    document.querySelector('.flip-card').classList.remove('flipped');
-    alert('Settings saved successfully!');
-
     // Construct the query string
     const queryString = new URLSearchParams(settings).toString();
 
@@ -84,10 +81,14 @@ async function saveSettings() {
         });
         const data = await response.json();
         console.log(`thedata:`, data);
+
+        document.querySelector('.flip-card').classList.remove('flipped');
+        alert('Settings saved successfully!');
     } catch (error) {
         console.error('Error:', error);
     }
 }
+
 async function refreshLogEntries() {
     showLoadingScreen(); // Show the loading screen
     try {
@@ -332,6 +333,8 @@ function stopAutoScanning() {
 }
 
 async function scanNextPair() {
+    const scanSelection = document.getElementById('refreshRate').value;
+    console.log(scanSelection)
     if (pairs.length === 0) {
         console.warn('No pairs available to scan');
         return;
@@ -342,8 +345,13 @@ async function scanNextPair() {
     } catch (error) {
         console.error('Error in scanNextPair:', error);
     }
-    currentPairIndex = (currentPairIndex + 1) % pairs.length;
-    localStorage.setItem('currentPairIndex', currentPairIndex);
+
+    // cycle through pairs otherwise interval scan
+    if (scanSelection !== "intervalScan") {
+        currentPairIndex = (currentPairIndex + 1) % pairs.length;
+        localStorage.setItem('currentPairIndex', currentPairIndex);
+    }
+
 }
 
 
