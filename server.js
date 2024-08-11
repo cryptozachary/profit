@@ -12,8 +12,25 @@ const { reset } = require('nodemon');
 const mongoose = require('mongoose');
 const Settings = require('./models/settings');
 const BullBear = require('./models/bullbearlog');
+const initializeApp = require('firebase/app');
+const getAnalytics = require("firebase/analytics");
 
 const TAAPI_SECRET = process.env.TAAPI_SECRET;
+
+// firebases setup for authentication
+const firebaseConfig = {
+    apiKey: "AIzaSyDaKHxH1IpJdicB7Rx2Fv2SKlGpeSBHkxs",
+    authDomain: "know-your-strats.firebaseapp.com",
+    projectId: "know-your-strats",
+    storageBucket: "know-your-strats.appspot.com",
+    messagingSenderId: "211186066430",
+    appId: "1:211186066430:web:90be81e5552a97928056af",
+    measurementId: "G-19M8DBG8C1"
+};
+
+// Initialize Firebase
+//const firebaseApp = initializeApp(firebaseConfig);
+//const analytics = getAnalytics(app);
 
 // Function to connect to the MongoDB database
 async function connectToDatabase() {
@@ -350,7 +367,7 @@ app.post('/check-profitability', async (req, res) => {
 
             const targets = estimateTargetPrice(GLOBAL_VARIABLES.assetPrice, technicalData, patternData, overallPrediction)
 
-            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence, GLOBAL_SETTINGS.notifications, GLOBAL_SETTINGS.notifyEmail)
+            await logBullBear(GLOBAL_VARIABLES.name, targets.currentPrice, targets.targetPrice, interval, period, overallPrediction, targets.predictedDirection, targets.confidence, GLOBAL_SETTINGS.notifications, GLOBAL_SETTINGS.notifyEmail, GLOBAL_VARIABLES)
 
             return res.json([{ isProfitable: overallPrediction }, GLOBAL_VARIABLES, { reasons: predictions }, { technicalData: technicalData, patternData: patternData, targets: targets }, { exchange: settings.exchange }]);
 
@@ -835,7 +852,7 @@ async function logFlagPattern(pair, flagType, targetPrice, flagpoleHeight) {
     }
 }
 
-async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence, notifications, notifyEmail) {
+async function logBullBear(pair, currentPrice, targetPrice, interval, period, direction, direction2, confidence, notifications, notifyEmail, GV) {
     const logDir = path.join(__dirname, 'logs');
     const logFile = path.join(logDir, 'bullbear.log');
     const timestamp = new Date().toISOString();
@@ -852,7 +869,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
 
     if (logAsset && determineConfidence) {
         const prediction = direction === "rise" ? "Bullish" : 'Bearish';
-        const logEntry = `${newTimeSTamp} - ${pair} -${prediction}!- Current Price: ${currentPrice} Target Price: ${targetPrice} , ${interval}/${period}\n`;
+        const logEntry = `${newTimeSTamp} - ${pair} -${prediction}!- Current Price: ${currentPrice}- Target Price: ${targetPrice}, ${interval}/${period}, Conensus: Rise: ${GV.rise}, Fall: ${GV.fall}, Neutral: ${GV.neutral},\n`;
 
         try {
             // Create logs directory if it doesn't exist

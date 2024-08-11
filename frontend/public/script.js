@@ -419,6 +419,16 @@ async function checkProfitability(data) {
     const chooseAsset = document.getElementById('chooseAsset').value;
     const [asset2, pair] = chooseAsset.split('/');
     const formula = document.getElementById('formula').value;
+    const theButton = document.getElementById('checkProfitability')
+    const intervalValue = parseInt(document.getElementById('scanInterval').value) - 500;
+
+    // set the BullishOrBearish button to disabled until the interval time expires
+    theButton.disabled = true;
+    theButton.classList.add('btnDisabled', 'no-pointer');
+    setTimeout(() => {
+        theButton.disabled = false;
+        theButton.classList.remove('btnDisabled', 'no-pointer');
+    }, intervalValue);
 
     if (formula !== "all" && formula !== "7" && formula !== "8") {
         const flagResult = document.getElementById('flagResult')

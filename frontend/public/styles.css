@@ -295,6 +295,11 @@ button {
     background-color: #45a049;
 }
 
+#consensusValue,
+#singularValue {
+    text-transform: capitalize;
+}
+
 /* Dark theme styles */
 body.dark-theme {
     background-color: #222;
