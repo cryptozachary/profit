@@ -228,10 +228,7 @@ async function initializeApplication() {
 }
 
 function initializeUI() {
-    const pair = pairs[currentPairIndex];
-    checkProfitability().then(() => {
-        hideLoadingScreen();
-    });
+    checkProfitability()
 }
 
 function showLoadingScreen() {
