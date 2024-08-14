@@ -59,6 +59,7 @@ async function saveSettings() {
     const notifications = document.getElementById('notifications').checked;
     const customIndicator = document.getElementById('customIndicator').value;
     const language = document.getElementById('language').value
+    const modal = document.getElementById('logModal3')
 
     const settings = {
         theme: theme,
@@ -82,8 +83,12 @@ async function saveSettings() {
         const data = await response.json();
         console.log(`thedata:`, data);
 
-        document.querySelector('.flip-card').classList.remove('flipped');
-        alert('Settings saved successfully!');
+        //show Modal then hide modal
+        modal.style.display = 'block';
+        setTimeout(() => {
+            document.querySelector('.flip-card').classList.remove('flipped');
+            modal.style.display = 'none';
+        }, 1500)
     } catch (error) {
         console.error('Error:', error);
     }
