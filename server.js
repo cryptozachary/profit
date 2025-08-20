@@ -16,6 +16,7 @@ const axios = require('axios');
 const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
 const { createCanvas } = require('canvas');
+const fsStream = require('fs');
 require('dotenv').config();
 
 // Models
@@ -31,7 +32,7 @@ const BIND_IP = '192.168.1.82';
 
 // Firebase config (unused; preserved for context)
 const firebaseConfig = {
-    apiKey: 'AIzaSyDaKHxH1IpJdicB7Rx2Fv2SKlGpeSBHkxs',
+    apiKey: 'AIzaSyDaKHxH1IpJdicB7Rx2vSKlGpeSBHkxs',
     authDomain: 'know-your-strats.firebaseapp.com',
     projectId: 'know-your-strats',
     storageBucket: 'know-your-strats.appspot.com',
@@ -168,12 +169,12 @@ function resetConsensusCounts() {
  * Middleware
  ************************************/
 /**
- * Fetch exchange symbols filtered to USDT,  /USDC,/USD and attach to req.symbols.*/
-
+ * Fetch exchange symbols filtered to USDT,/USDC,/USD and attach to req.symbols.
+ */
 async function getSymbols(req, res, next) {
     try {
         const settings = await loadSettings();
-        runtimeSettings.exchange = settings.exchange; // fix: was set on GLOBAL_VARIABLES before
+        runtimeSettings.exchange = settings.exchange;
 
         const url = `https://api.taapi.io/exchange-symbols?secret=${TAAPI_SECRET}&exchange=${settings.exchange}`;
         const { data } = await axios.get(url);
@@ -230,6 +231,25 @@ async function persistLogEntry(logEntry, prediction, pair) {
 }
 
 /************************************
+ * Parsing Helpers for TAAPI `results`
+ ************************************/
+// Many TAAPI endpoints return an array when `results=N` is used.
+// Helpers below normalize shapes so evaluators get what they expect.
+
+function valuesFromResults(resp, field = 'value') {
+    const raw = resp?.data;
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.map((x) => Number(x[field] ?? x));
+    if (typeof raw[field] !== 'undefined') return [Number(raw[field])];
+    return [];
+}
+function objectsFromResults(resp) {
+    const raw = resp?.data;
+    if (!raw) return [];
+    return Array.isArray(raw) ? raw : [raw];
+}
+
+/************************************
  * Pattern Rendering
  ************************************/
 async function renderFlagPatternCanvas(candleData) {
@@ -246,16 +266,16 @@ async function renderFlagPatternCanvas(candleData) {
     const minPrice = Math.min(...prices);
 
     const priceRange = maxPrice - minPrice;
-    const priceScale = canvasHeight / priceRange;
+    const priceScale = canvasHeight / (priceRange || 1);
 
     const canvas = createCanvas(canvasWidth, canvasHeight);
     const ctx = canvas.getContext('2d');
 
     // grid lines
-    const priceStep = 100;
+    const priceStep = (maxPrice - minPrice) / 8 || 1;
     ctx.strokeStyle = '#d3d3d3';
     ctx.lineWidth = 1;
-    for (let p = Math.ceil(minPrice / priceStep) * priceStep; p <= maxPrice; p += priceStep) {
+    for (let p = minPrice; p <= maxPrice + 1e-9; p += priceStep) {
         const y = canvasHeight - (p - minPrice) * priceScale;
         ctx.beginPath();
         ctx.moveTo(0, y);
@@ -274,8 +294,10 @@ async function renderFlagPatternCanvas(candleData) {
 
         ctx.strokeStyle = c.close < c.open ? 'red' : 'green';
         ctx.fillStyle = c.close < c.open ? 'red' : 'green';
-        ctx.fillRect(x + 2, yOpen, candleWidth - 4, yClose - yOpen);
-        ctx.strokeRect(x + 2, yOpen, candleWidth - 4, yClose - yOpen);
+        const rectY = Math.min(yOpen, yClose);
+        const rectH = Math.max(2, Math.abs(yClose - yOpen));
+        ctx.fillRect(x + 2, rectY, candleWidth - 4, rectH);
+        ctx.strokeRect(x + 2, rectY, candleWidth - 4, rectH);
 
         ctx.beginPath();
         ctx.moveTo(x + candleWidth / 2, yHigh);
@@ -305,33 +327,37 @@ async function renderFlagPatternCanvas(candleData) {
         const c = candleData[i];
         const x = i * candleWidth + 2;
         const yClose = canvasHeight - (c.close - minPrice) * priceScale - 18;
-        ctx.fillText(c.close.toFixed(2), x, yClose);
+        ctx.fillText(Number(c.close).toFixed(2), x, yClose);
     }
 
+    // Save the canvas we actually drew on (fixing previous bug)
     const outPath = path.join(__dirname, 'bear_flag_pattern.png');
-    const out = await fs.open(outPath, 'w');
-    await out.close();
-    const stream = createCanvas(canvasWidth, canvasHeight).createPNGStream();
-    // Keep original behavior: write a file named bear_flag_pattern.png
-    const fileStream = (await require('fs')).createWriteStream(outPath);
-    stream.pipe(fileStream);
-    fileStream.on('finish', () => console.log('Bear flag pattern saved as bear_flag_pattern.png'));
+    await fs.mkdir(path.dirname(outPath), { recursive: true });
+    await new Promise((resolve, reject) => {
+        const out = fsStream.createWriteStream(outPath);
+        canvas.createPNGStream().pipe(out);
+        out.on('finish', resolve);
+        out.on('error', reject);
+    });
+    console.log('Bear flag pattern saved as bear_flag_pattern.png');
 }
 
 /************************************
  * Indicator Helpers (volatility, trends)
  ************************************/
-function calculateVolatility(historicalData) {
-    const values = historicalData.map((d) => d.value);
+function calculateVolatility(series) {
+    // Accept array of numbers
+    const values = series;
+    if (!values.length) return 0;
     const mean = values.reduce((s, v) => s + v, 0) / values.length;
     const squared = values.map((v) => Math.pow(v - mean, 2));
     return Math.sqrt(squared.reduce((s, v) => s + v, 0) / values.length);
 }
 
-function getExtremeRSIDuration(historicalData, threshold, isOverbought) {
+function getExtremeRSIDuration(series, threshold, isOverbought) {
     let duration = 0;
-    for (let i = historicalData.length - 1; i >= 0; i--) {
-        const val = historicalData[i].value;
+    for (let i = series.length - 1; i >= 0; i--) {
+        const val = series[i];
         if ((isOverbought && val > threshold) || (!isOverbought && val < threshold)) duration++;
         else break;
     }
@@ -339,277 +365,268 @@ function getExtremeRSIDuration(historicalData, threshold, isOverbought) {
 }
 
 /************************************
- * Indicator Evaluators (names preserved in behavior)
+ * Indicator Evaluators (improved)
  ************************************/
-function rsiFormula(currentRSI, historicalRSI) {
-    const rsiValue = currentRSI.value;
-    indicatorState.rsiValue = rsiValue;
-
-    const previousRSI = historicalRSI.length > 1 ? historicalRSI[historicalRSI.length - 2] : rsiValue;
-    const volatilityAdjustment = Math.min(calculateVolatility(historicalRSI) * 2, 10);
-
-    const upperThreshold = 70 + volatilityAdjustment;
-    const lowerThreshold = 30 - volatilityAdjustment;
-
-    const overboughtDuration = getExtremeRSIDuration(historicalRSI, upperThreshold, true);
-    const oversoldDuration = getExtremeRSIDuration(historicalRSI, lowerThreshold, false);
-
-    if (rsiValue > upperThreshold) {
-        const strength = overboughtDuration > 3 ? 2 : 2;
-        return { direction: 'fall', value: strength, reason: `RSI overbought for ${overboughtDuration} periods`, RSI: rsiValue };
-    } else if (rsiValue < lowerThreshold) {
-        const strength = oversoldDuration > 3 ? -1 : -1;
-        return { direction: 'rise', value: strength, reason: `RSI oversold for ${oversoldDuration} periods`, RSI: rsiValue };
-    } else if (rsiValue > 50 && rsiValue < previousRSI) {
-        return { direction: 'fall', value: 1, reason: 'RSI declining from bullish territory', RSI: rsiValue };
-    } else if (rsiValue < 50 && rsiValue > previousRSI) {
-        return { direction: 'rise', value: 0, reason: 'RSI rising from bearish territory', RSI: rsiValue };
-    }
-    return { direction: 'neutral', value: '00', reason: 'RSI in neutral zone', RSI: rsiValue };
+// Map our (direction,value) to a normalized score in [-1,1] if needed elsewhere.
+function scoreFromDirection(direction, value) {
+    if (direction === 'rise') return value === -1 ? 1 : value === 0 ? 0.5 : 0;
+    if (direction === 'fall') return value === 2 ? -1 : value === 1 ? -0.5 : 0;
+    return 0;
 }
 
-function macdFormula(data, historicalData) {
-    const macdLine = parseFloat(data.valueMACD);
-    const signalLine = parseFloat(data.valueMACDSignal);
-    const histogram = macdLine - signalLine;
+function rsiFormula(currentRSI, historicalRSI) {
+    const rsiCur = Number(currentRSI.value);
+    indicatorState.rsiValue = rsiCur;
 
-    indicatorState.MacdValue = `MACD: ${macdLine.toFixed(4)} Signal: ${signalLine.toFixed(4)} Histogram: ${histogram.toFixed(4)}`;
+    const series = Array.isArray(historicalRSI) ? historicalRSI.map(Number) : [];
+    const lastN = series.slice(-20);
+    const mean = lastN.length ? lastN.reduce((s, v) => s + v, 0) / lastN.length : 50;
+    const std = Math.sqrt(lastN.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (lastN.length || 1)) || 1;
 
-    const previousMACD = historicalData[historicalData.length - 2].valueMACD;
-    const previousSignal = historicalData[historicalData.length - 2].valueMACDSignal;
-    const macdTrend = macdLine > previousMACD ? 'rising' : 'falling';
-    const signalTrend = signalLine > previousSignal ? 'rising' : 'falling';
+    // Dynamic guardrails around 50; clipped to classic 30/70
+    let upperThreshold = Math.min(70, 50 + 1.25 * std);
+    let lowerThreshold = Math.max(30, 50 - 1.25 * std);
 
-    const signalStrength = Math.abs(histogram) / ((macdLine + signalLine) / 2);
+    const overboughtDuration = getExtremeRSIDuration(series, upperThreshold, true);
+    const oversoldDuration = getExtremeRSIDuration(series, lowerThreshold, false);
 
-    let direction, value, reason;
+    let direction = 'neutral';
+    let value = '00';
+    let reason = `RSI=${rsiCur.toFixed(1)} dyn[${lowerThreshold.toFixed(1)}, ${upperThreshold.toFixed(1)}]`;
 
-    if (macdLine > signalLine) {
-        direction = 'rise';
-        value = signalStrength > 0.1 ? 0 : 0;
-        reason = `MACD (${macdTrend}) above Signal (${signalTrend})`;
-        if (macdLine > 0 && signalLine > 0) {
-            reason += 'MACD: above zero line - strong bullish';
-            value = -1;
-        }
-    } else if (macdLine < signalLine) {
+    const prevRSI = series.at(-1) ?? rsiCur;
+
+    if (rsiCur > upperThreshold) {
         direction = 'fall';
-        value = signalStrength > 0.1 ? 1 : 1;
-        reason = `MACD (${macdTrend}) below Signal (${signalTrend})`;
-        if (macdLine < 0 && signalLine < 0) {
-            reason += 'MACD: below zero line - strong bearish';
-            value = 2;
-        }
+        value = overboughtDuration >= 3 ? 2 : 1;
+        reason += `; overbought for ${overboughtDuration}`;
+    } else if (rsiCur < lowerThreshold) {
+        direction = 'rise';
+        value = oversoldDuration >= 3 ? -1 : 0;
+        reason += `; oversold for ${oversoldDuration}`;
+    } else if (rsiCur > 50 && rsiCur < prevRSI) {
+        direction = 'fall';
+        value = 1;
+        reason += '; easing from bullish';
+    } else if (rsiCur < 50 && rsiCur > prevRSI) {
+        direction = 'rise';
+        value = 0;
+        reason += '; improving from bearish';
     } else {
-        direction = 'neutral';
-        value = '00';
-        reason = 'MACD and Signal lines are equal';
+        reason += '; neutral';
     }
 
-    const priceTrend = historicalData[historicalData.length - 1].close > historicalData[0].close ? 'rising' : 'falling';
-    if (priceTrend !== macdTrend) {
-        reason += ' - Potential divergence detected';
-        value = Math.min(value + 1, 2);
+    return { direction, value, reason, RSI: rsiCur, upper: upperThreshold, lower: lowerThreshold };
+}
+
+function macdFormula(current, historyObjs) {
+    const M = Number(current.valueMACD);
+    const S = Number(current.valueMACDSignal);
+    const H = Number(current.valueMACDHist);
+
+    const prev = (historyObjs && historyObjs.length) ? historyObjs.at(-1) : current;
+    const Hprev = Number(prev.valueMACDHist ?? 0);
+    const Hslope = H - Hprev;
+
+    indicatorState.MacdValue = `MACD:${M.toFixed(4)} Signal:${S.toFixed(4)} Histogram:${H.toFixed(4)}`;
+
+    let direction = 'neutral';
+    let value = '00';
+    let reason = `MACD=${M.toFixed(2)} Sig=${S.toFixed(2)} Hist=${H.toFixed(2)} dH=${Hslope.toFixed(2)}`;
+
+    const above = M > S, below = M < S;
+    const aboveZero = (M > 0 && S > 0), belowZero = (M < 0 && S < 0);
+
+    if (above) {
+        direction = 'rise';
+        value = aboveZero ? -1 : 0;
+        reason += aboveZero ? '; bull>0 (strong)' : '; bull<0 (weaker)';
+    } else if (below) {
+        direction = 'fall';
+        value = belowZero ? 2 : 1;
+        reason += belowZero ? '; bear<0 (strong)' : '; bear>0 (weaker)';
+    } else {
+        reason += '; lines equal';
+    }
+
+    if (direction === 'rise' && Hslope < 0) {
+        reason += '; hist losing momentum';
+        value = Math.max(value, 0);
+    }
+    if (direction === 'fall' && Hslope > 0) {
+        reason += '; hist losing momentum';
+        value = Math.min(value, 2);
+    }
+
+    // Simple price trend divergence check if closes exist on history objects
+    if (historyObjs && historyObjs.length >= 2) {
+        const firstClose = Number(historyObjs[0]?.close ?? NaN);
+        const lastClose = Number(historyObjs.at(-1)?.close ?? NaN);
+        if (!Number.isNaN(firstClose) && !Number.isNaN(lastClose)) {
+            const priceTrend = lastClose > firstClose ? 'rising' : lastClose < firstClose ? 'falling' : 'flat';
+            const macdTrend = Hslope > 0 ? 'rising' : Hslope < 0 ? 'falling' : 'flat';
+            if ((priceTrend === 'rising' && macdTrend === 'falling') || (priceTrend === 'falling' && macdTrend === 'rising')) {
+                reason += ' ; potential divergence';
+            }
+        }
     }
 
     return { direction, value, reason };
 }
 
-function bollingerBandsFormula(data, historicalData = []) {
-    const price = parseFloat(indicatorState.assetPrice);
-    const upperBand = parseFloat(data.valueUpperBand);
-    const lowerBand = parseFloat(data.valueLowerBand);
-    const middleBand = parseFloat(data.valueMiddleBand);
+function bollingerBandsFormula(bbCurrent, bbHistoryObjs, price = Number(indicatorState.assetPrice)) {
+    const U = Number(bbCurrent.valueUpperBand);
+    const M = Number(bbCurrent.valueMiddleBand);
+    const L = Number(bbCurrent.valueLowerBand);
 
-    indicatorState.bollValue = `Upper: ${upperBand.toFixed(4)} Middle: ${middleBand.toFixed(4)} Lower: ${lowerBand.toFixed(4)}`;
+    indicatorState.bollValue = `Upper:${U.toFixed(4)} Middle:${M.toFixed(4)} Lower:${L.toFixed(4)}`;
 
-    const bandwidth = (upperBand - lowerBand) / middleBand;
-    const percentB = (price - lowerBand) / (upperBand - lowerBand);
+    const prevM = Number((bbHistoryObjs?.at(-1) ?? bbCurrent).valueMiddleBand ?? M);
+    const band = U - L;
+    const percentB = (price - L) / (band || 1);
+    const bandwidth = band / (M || 1);
+    const smaSlope = M - prevM;
 
-    const trend =
-        historicalData.length > 1
-            ? middleBand > historicalData[historicalData.length - 2].valueMiddleBand
-                ? 'up'
-                : 'down'
-            : 'unknown';
+    let direction = 'neutral';
+    let value = '00';
+    let reason = `%B=${percentB.toFixed(2)} BW=${bandwidth.toFixed(3)} SMAΔ=${smaSlope.toFixed(2)}`;
 
-    let direction, value, reason;
-
-    if (price > upperBand) {
+    if (percentB > 1.02) {
         direction = 'fall';
-        value = percentB > 1.05 ? 2 : 1;
-        reason = `Price above upper band (${percentB.toFixed(2)}), potential reversal downward`;
-    } else if (price < lowerBand) {
+        value = 1;
+        reason += '; pierce upper → mean revert';
+    } else if (percentB < -0.02) {
         direction = 'rise';
-        value = percentB < -0.05 ? 2 : 0;
-        reason = `Price below lower band (${percentB.toFixed(2)}), potential reversal upward`;
+        value = 0;
+        reason += '; pierce lower → mean revert';
     } else {
-        direction = 'neutral';
-        value = '00';
-        reason = `Price within bands (${percentB.toFixed(2)})`;
-        if (bandwidth < 0.1 && trend !== 'unknown') {
-            direction = trend;
-            if (direction === 'up') value = -1;
-            if (direction === 'down') value = 2;
-            reason += `, low bandwidth (${bandwidth.toFixed(2)}), potential ${trend}ward breakout`;
-        }
-    }
-
-    if (trend !== 'unknown') reason += `, overall trend: ${trend}`;
-    if (direction === 'down') direction = 'fall';
-    if (direction === 'up') direction = 'rise';
-
-    return { direction, value, reason, percentB, bandwidth, lowerBand, upperBand };
-}
-
-function determineTrendStrength(historicalData) {
-    if (!historicalData || historicalData.length < 5) return 'unknown';
-    const recent = historicalData.slice(-5).map((d) => d.value);
-    const avg = recent.reduce((s, v) => s + v, 0) / recent.length;
-    if (avg < 38.2) return 'strong';
-    if (avg > 61.8) return 'weak';
-    return 'moderate';
-}
-
-function fibonacciRetracementFormula(data, historicalData = []) {
-    const retracementValue = parseFloat(data.value);
-    const currentTrend = data.trend;
-    const price = parseFloat(indicatorState.assetPrice);
-
-    indicatorState.fibonValue = `Retrace: ${retracementValue.toFixed(4)} Trend: ${currentTrend}`;
-
-    const levels = [0, 23.6, 38.2, 50, 61.8, 78.6, 100];
-    const nearestLevel = levels.reduce((prev, curr) => (Math.abs(curr - retracementValue) < Math.abs(prev - retracementValue) ? curr : prev));
-
-    let direction, value, reason;
-    const trendStrength = determineTrendStrength(historicalData);
-
-    if (currentTrend === 'DOWNTREND') {
-        if (retracementValue > 61.8) {
-            direction = 'fall';
-            value = retracementValue > 78.6 ? 2 : 2;
-            reason = `Strong FIB retracement (${nearestLevel}%) in downtrend, potential continuation`;
+        // Squeeze breakout bias
+        const squeeze = bandwidth < 0.06; // tunable
+        if (squeeze && Math.abs(smaSlope) > 0) {
+            direction = smaSlope > 0 ? 'rise' : 'fall';
+            value = smaSlope > 0 ? 0 : 1;
+            reason += `; squeeze→${direction}`;
         } else {
-            direction = 'rise';
-            value = retracementValue < 38.2 ? 0 : 0;
-            reason = `Weak FIB retracement (${nearestLevel}%) in downtrend, potential reversal`;
-        }
-    } else {
-        if (retracementValue < 38.2) {
-            direction = 'rise';
-            value = retracementValue < 23.6 ? -1 : -1;
-            reason = `Weak FIB retracement (${nearestLevel}%) in uptrend, potential continuation`;
-        } else {
-            direction = 'fall';
-            value = retracementValue > 61.8 ? 1 : 1;
-            reason = `Strong FIB retracement (${nearestLevel}%) in uptrend, potential reversal`;
+            reason += '; inside bands';
         }
     }
 
-    if (trendStrength === 'strong' && direction === currentTrend.toLowerCase()) {
-        value = Math.min(value + 1, 2);
-        reason += ', strong overall trend supports this direction';
-    } else if (trendStrength === 'weak' && direction !== currentTrend.toLowerCase()) {
-        value = Math.min(value + 1, 2);
-        reason += ', weak overall trend supports potential reversal';
+    return { direction, value, reason, percentB, bandwidth, lowerBand: L, upperBand: U };
+}
+
+function fibonacciRetracementFormula(frCur) {
+    // TAAPI returns a price in `value` and a `trend` with startPrice/endPrice.
+    const price = Number(indicatorState.assetPrice);
+    const trend = (frCur?.trend || 'AUTO').toUpperCase();
+    const start = Number(frCur?.startPrice);
+    const end = Number(frCur?.endPrice);
+
+    // Normalize hi/lo for easier math
+    const uptrend = trend === 'UPTREND';
+    const hi = uptrend ? end : start;
+    const lo = uptrend ? start : end;
+    const span = (hi - lo) || 1;
+
+    const levelsPct = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1];
+    const levelAt = (p) => uptrend ? (lo + span * p) : (hi - span * p);
+    const levels = levelsPct.map(levelAt);
+
+    // nearest level to current price
+    let idx = 0, best = Infinity;
+    for (let i = 0; i < levels.length; i++) {
+        const d = Math.abs(price - levels[i]);
+        if (d < best) { best = d; idx = i; }
     }
 
-    return { direction, value, reason, retracementLevel: nearestLevel, trendStrength };
-}
+    let direction = 'neutral';
+    let value = '00';
+    let reason = `Fib trend=${uptrend ? 'UP' : 'DOWN'}, nearest ${(levelsPct[idx] * 100).toFixed(1)}%`;
 
-function calculateVOSCTrend(historicalData, periods = 5) {
-    if (!historicalData || historicalData.length < periods) return 'unknown';
-    const recent = historicalData.slice(-periods).map((d) => d.value);
-    const first = recent.slice(0, Math.floor(periods / 2));
-    const second = recent.slice(-Math.floor(periods / 2));
-    const firstAvg = first.reduce((s, v) => s + v, 0) / first.length;
-    const secondAvg = second.reduce((s, v) => s + v, 0) / second.length;
-    if (secondAvg > firstAvg) return 'rising';
-    if (secondAvg < firstAvg) return 'falling';
-    return 'neutral';
-}
+    const inGolden = idx >= 2 && idx <= 4; // 38.2% to 61.8%
 
-function calculatePriceTrend(historicalData, periods = 5) {
-    if (!historicalData || historicalData.length < periods || !historicalData[0].price) return null;
-    const recent = historicalData.slice(-periods).map((d) => d.price);
-    const first = recent[0];
-    const last = recent[recent.length - 1];
-    if (last > first) return 'rise';
-    if (last < first) return 'fall';
-    return 'neutral';
-}
-
-function voscFormula(data, historicalData = []) {
-    const voscValue = parseFloat(data.value);
-    indicatorState.volumeValue = voscValue.toFixed(2);
-
-    const strongSignalThreshold = 20;
-    const voscTrend = calculateVOSCTrend(historicalData);
-
-    let direction, value, reason;
-
-    if (voscValue > 0) {
-        direction = 'rise';
-        value = voscValue > strongSignalThreshold ? 0 : 0;
-        reason = `Positive VOSC (${voscValue.toFixed(2)}), indicating higher short-term volume`;
-    } else if (voscValue < 0) {
-        direction = 'fall';
-        value = voscValue < -strongSignalThreshold ? 1 : 1;
-        reason = `Negative VOSC (${voscValue.toFixed(2)}), indicating higher long-term volume`;
+    if (uptrend) {
+        if (inGolden && price >= levels[2] && price <= levels[4]) {
+            direction = 'rise'; value = 0; reason += '; buy-the-dip zone';
+        } else if (price < levels[5]) {
+            direction = 'fall'; value = 1; reason += '; deep retrace risk (≤78.6)';
+        }
     } else {
-        direction = 'neutral';
-        value = '00';
-        reason = 'VOSC at zero, indicating balanced short and long-term volumes';
+        if (inGolden && price <= levels[4] && price >= levels[2]) {
+            direction = 'fall'; value = 1; reason += '; sell-the-rip zone';
+        } else if (price > levels[5]) {
+            direction = 'rise'; value = 0; reason += '; deep retrace risk (≥78.6)';
+        }
     }
 
-    if (voscTrend === 'rising' && direction === 'rise') {
-        value = -1;
-        reason += ', with rising trend strengthening the signal';
-    } else if (voscTrend === 'falling' && direction === 'fall') {
-        value = 2;
-        reason += ', with falling trend strengthening the signal';
-    } else if (voscTrend !== 'neutral') {
-        reason += `, but ${voscTrend} trend suggests caution`;
+    indicatorState.fibonValue = `RetracePx:${Number(frCur?.value ?? price).toFixed(2)} Trend:${uptrend ? 'UP' : 'DOWN'}`;
+    return { direction, value, reason, retracementLevel: (levelsPct[idx] * 100) };
+}
+
+function calculateVOSCTrend(series) {
+    const last = series.slice(-6);
+    if (last.length < 6) return 'neutral';
+    const a = last.slice(0, 3).reduce((s, v) => s + v, 0) / 3;
+    const b = last.slice(3).reduce((s, v) => s + v, 0) / 3;
+    return b > a ? 'rising' : b < a ? 'falling' : 'neutral';
+}
+
+function voscFormula(cur, histArr = []) {
+    const v = Number(cur.value);
+    const series = histArr.map((x) => Number(x.value ?? x));
+    const mean = series.length ? series.reduce((s, n) => s + n, 0) / series.length : 0;
+    const std = Math.sqrt(series.reduce((s, n) => s + Math.pow(n - mean, 2), 0) / (series.length || 1)) || 1;
+    const z = (v - mean) / std;
+
+    indicatorState.volumeValue = v.toFixed(2);
+
+    let direction = 'neutral';
+    let value = '00';
+    let reason = `VOSC=${v.toFixed(2)} z=${z.toFixed(2)}`;
+
+    if (v > 0) { direction = 'rise'; value = z > 1 ? -1 : 0; reason += z > 1 ? '; strong +vol' : ' ; +vol'; }
+    else if (v < 0) { direction = 'fall'; value = z < -1 ? 2 : 1; reason += z < -1 ? '; strong -vol' : ' ; -vol'; }
+
+    const trend = calculateVOSCTrend(series);
+    if ((direction === 'rise' && trend === 'rising') || (direction === 'fall' && trend === 'falling')) {
+        reason += '; trend confirm';
+    } else if (trend !== 'neutral') {
+        reason += '; vol trend caution';
     }
 
-    const priceTrend = calculatePriceTrend(historicalData);
-    if (priceTrend && priceTrend !== direction) {
-        reason += '. Potential divergence with price trend detected';
-    }
-
-    return { direction, value, reason, voscValue, voscTrend };
+    return { direction, value, reason, voscValue: v, voscTrend: trend };
 }
 
 async function emaCrossoverFormula(cryptoAsset, interval, period) {
     const shortPeriod = Number(period);
     const longPeriod = Number(period) + 14;
+    const ex = runtimeSettings.exchange;
 
-    const shortEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=${runtimeSettings.exchange}&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${shortPeriod}`;
-    const longEmaEndpoint = `https://api.taapi.io/ema?secret=${TAAPI_SECRET}&exchange=${runtimeSettings.exchange}&symbol=${cryptoAsset}/USDT&interval=${interval}&backtracks=2&period=${longPeriod}`;
+    const base = `secret=${TAAPI_SECRET}&exchange=${ex}&symbol=${cryptoAsset}/USDT&interval=${interval}`;
 
     try {
-        const [shortEmaResponse, longEmaResponse] = await Promise.all([axios.get(shortEmaEndpoint), axios.get(longEmaEndpoint)]);
+        const [shortEmaResponse, longEmaResponse] = await Promise.all([
+            axios.get(`https://api.taapi.io/ema?${base}&period=${shortPeriod}&backtrack=0`),
+            axios.get(`https://api.taapi.io/ema?${base}&period=${longPeriod}&results=3&addResultTimestamp=true`)
+        ]);
 
-        if (!shortEmaEndpoint || !longEmaEndpoint) return { direction: 'neutral', value: '00', reason: 'No EMA Candles' };
+        const currentShortEma = Number(shortEmaResponse?.data?.value);
+        const longArr = Array.isArray(longEmaResponse?.data) ? longEmaResponse.data : [longEmaResponse.data];
+        const currentLongEma = Number(longArr.at(-1)?.value);
+        const previousLongEma = Number(longArr.at(-2)?.value ?? currentLongEma);
 
-        const currentShortEma = shortEmaResponse.data[0].value;
-        const previousShortEma = shortEmaResponse.data[1].value;
-        const currentLongEma = longEmaResponse.data[0].value;
-        const previousLongEma = longEmaResponse.data[1].value;
+        indicatorState.emaValue = `CShort: ${currentShortEma.toFixed(4)} CLong: ${currentLongEma.toFixed(4)} PrevLong: ${previousLongEma.toFixed(4)}`;
 
-        const rCSE = parseFloat(currentShortEma.toFixed(4));
-        const rCLE = parseFloat(currentLongEma.toFixed(4));
-        const rPSE = parseFloat(previousShortEma.toFixed(4));
-        const rPLE = parseFloat(previousLongEma.toFixed(4));
+        const crossedUp = currentShortEma > currentLongEma && previousLongEma >= currentLongEma ? true : false;
+        const crossedDn = currentShortEma < currentLongEma && previousLongEma <= currentLongEma ? true : false;
+        const leSlopeUp = currentLongEma > previousLongEma;
+        const leSlopeDn = currentLongEma < previousLongEma;
 
-        indicatorState.emaValue = `CShort: ${rCSE} CLong: ${rCLE} PShort: ${rPSE} Plong: ${rPLE}`;
-
-        if (currentShortEma > currentLongEma && previousShortEma <= previousLongEma) return { direction: 'rise', value: 0 };
-        if (currentShortEma < currentLongEma && previousShortEma >= previousLongEma) return { direction: 'fall', value: 1 };
-        return { direction: 'neutral', value: '00', reason: 'Unable to determine EMA' };
+        if ((currentShortEma > currentLongEma) && leSlopeUp) return { direction: 'rise', value: 0, reason: 'Golden cross + long EMA rising' };
+        if ((currentShortEma < currentLongEma) && leSlopeDn) return { direction: 'fall', value: 1, reason: 'Death cross + long EMA falling' };
+        return { direction: 'neutral', value: '00', reason: 'No confirmed cross' };
     } catch (err) {
         console.error(err);
-        throw new Error('Failed to retrieve EMA data (function): ' + JSON.stringify(err));
+        throw new Error('Failed to retrieve EMA data (function): ' + JSON.stringify(err?.response?.data ?? err.message));
     }
 }
 
@@ -642,6 +659,7 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
         let flagDuration = 0;
         let patternScore = 0;
 
+        // find significant down leg
         for (let i = 1; i < data.length; i++) {
             if (data[i] && data[i - 1] && (data[i - 1].high - data[i].low) / data[i - 1].high > significantDowntrendPercentage) {
                 flagpoleStart = i - 1;
@@ -666,8 +684,10 @@ async function getBearFlagSignal(api_secret, exchange, symbol, interval, period 
                 const flagHighBoundary = flagpoleHigh * (1 - flagThreshold);
                 const flagLowBoundary = flagpoleLow * (1 + flagThreshold);
 
+                // Break if channel invalid
                 if (data[i].high > flagHighBoundary || data[i].low < flagLowBoundary) break;
 
+                // Bearish breakout
                 if (data[i].close < flagLowBoundary) {
                     const avgVolumeFlagpole = volumeDuringFlagpole / (flagStart - flagpoleStart);
                     const avgVolumeFlag = volumeDuringFlag / flagDuration;
@@ -862,123 +882,108 @@ function evaluateAssetDirection(predictions) {
 }
 
 function estimateTargetPrice(currentPrice, technicalData, patternData) {
-    const { rsi, macd, bollingerBands, fibonacciRetracement, vosc } = technicalData;
+    const price = Number(currentPrice);
+
+    const {
+        rsi,
+        macd,
+        bollingerBands,
+        fibonacciRetracement,
+        vosc
+    } = technicalData;
+
     const { flagPattern, flagpoleHeight } = patternData;
 
-    let priceChangePercentage = 0;
-    let confidenceScore = 0;
-    let maxConfidenceScore = 0;
-    let predictedDirection = 'neutral';
+    // Convert each indicator to a normalized score in [-1, 1]
+    const parts = [];
+    const push = (w, dir, val) => parts.push(w * scoreFromDirection(dir, val));
+    if (rsi) push(1.0, rsi.direction, rsi.value);
+    if (macd) push(1.2, macd.direction, macd.value);
+    if (bollingerBands) push(1.2, bollingerBands.direction, bollingerBands.value);
+    if (fibonacciRetracement) push(0.8, fibonacciRetracement.direction, fibonacciRetracement.value);
+    if (vosc) push(0.7, vosc.direction, vosc.value);
 
-    // RSI contribution
-    maxConfidenceScore += 2;
-    if (rsi.RSI < 30) {
-        priceChangePercentage += 2;
-        confidenceScore += 2;
-        predictedDirection = 'rise';
-    } else if (rsi.RSI > 70) {
-        priceChangePercentage -= 2;
-        confidenceScore += 2;
-        predictedDirection = 'fall';
+    let sumW = 0;
+    let sum = 0;
+    for (const s of parts) { sum += s; sumW += Math.abs(s) ? (Math.abs(s) / Math.max(Math.abs(s), 1e-9)) : 1; }
+    const E = parts.length ? (sum / parts.length) : 0; // ensemble score [-1,1]
+
+    // Volatility base: half BB width in % of price (fallback 1.5%)
+    const basePct = bollingerBands
+        ? ((bollingerBands.upperBand - bollingerBands.lowerBand) / (2 * price)) * 100
+        : 1.5;
+
+    // Scale by ensemble strength
+    const k = 1 + 0.5 * Math.abs(E);
+    let movePct = k * basePct;
+
+    // Blend flagpole height modestly instead of full projection
+    if (flagPattern && flagpoleHeight) {
+        const flagPct = (flagpoleHeight / price) * 100;
+        movePct += Math.min(flagPct, basePct * 2) * 0.5; // cap contribution
     }
 
-    // MACD contribution
-    maxConfidenceScore += 2;
-    if (macd.direction === 'rise') {
-        priceChangePercentage += 1.5;
-        confidenceScore += 2;
-        predictedDirection = 'rise';
-    } else if (macd.direction === 'fall') {
-        priceChangePercentage -= 1.5;
-        confidenceScore += 2;
-        predictedDirection = 'fall';
-    }
+    const predictedDirection = E > 0 ? 'rise' : E < 0 ? 'fall' : 'neutral';
+    let targetPrice = price;
+    if (predictedDirection === 'rise') targetPrice = price * (1 + movePct / 100);
+    else if (predictedDirection === 'fall') targetPrice = price * (1 - movePct / 100);
 
-    // Bollinger Bands contribution
-    maxConfidenceScore += 2;
-    const bbPercentage = (currentPrice - bollingerBands.lowerBand) / (bollingerBands.upperBand - bollingerBands.lowerBand);
-    if (bbPercentage < 0.2) {
-        priceChangePercentage += 2;
-        confidenceScore += 2;
-        predictedDirection = 'rise';
-    } else if (bbPercentage > 0.8) {
-        priceChangePercentage -= 2;
-        confidenceScore += 2;
-        predictedDirection = 'fall';
-    }
+    const agreement = [
+        rsi?.direction, macd?.direction, bollingerBands?.direction,
+        fibonacciRetracement?.direction, vosc?.direction
+    ].filter(Boolean);
 
-    // Fibonacci Retracement contribution
-    maxConfidenceScore += 1;
-    if (fibonacciRetracement.direction === 'rise') {
-        priceChangePercentage += 1;
-        confidenceScore += 1;
-        predictedDirection = 'rise';
-    } else if (fibonacciRetracement.direction === 'fall') {
-        priceChangePercentage -= 1;
-        confidenceScore += 1;
-        predictedDirection = 'fall';
-    }
-
-    // VOSC contribution
-    maxConfidenceScore += 1;
-    if (vosc.direction === 'rise') {
-        priceChangePercentage += 1;
-        confidenceScore += 1;
-        predictedDirection = 'rise';
-    } else if (vosc.direction === 'fall') {
-        priceChangePercentage -= 1;
-        confidenceScore += 1;
-        predictedDirection = 'fall';
-    }
-
-    // Flag pattern contribution
-    maxConfidenceScore += 2;
-    if (flagPattern === 'bull' && flagpoleHeight) {
-        const flagPct = (flagpoleHeight / currentPrice) * 100;
-        priceChangePercentage += flagPct;
-        confidenceScore += 2;
-        predictedDirection = 'rise';
-    } else if (flagPattern === 'bear' && flagpoleHeight) {
-        const flagPct = (flagpoleHeight / currentPrice) * 100;
-        priceChangePercentage -= flagPct;
-        confidenceScore += 2;
-        predictedDirection = 'fall';
-    }
-
-    if (predictedDirection === 'rise' && priceChangePercentage < 0) priceChangePercentage = Math.abs(priceChangePercentage);
-    else if (predictedDirection === 'fall' && priceChangePercentage > 0) priceChangePercentage = -Math.abs(priceChangePercentage);
-
-    const targetPrice = parseFloat((currentPrice * (1 + priceChangePercentage / 100)).toFixed(8));
-    const normalizedConfidence = (confidenceScore / maxConfidenceScore) * 100;
+    const aligned = agreement.filter((d) => d === predictedDirection).length;
+    const conf = parts.length ? (50 + 50 * Math.abs(E)) : 50;
+    const confidence = Math.round(Math.min(100, Math.max(0, conf * (0.6 + 0.4 * (aligned / Math.max(1, agreement.length))))));
 
     return {
-        currentPrice,
-        targetPrice,
-        priceChangePercentage,
+        currentPrice: price,
+        targetPrice: Number(targetPrice.toFixed(8)),
+        priceChangePercentage: Number(((targetPrice - price) / price * 100).toFixed(4)),
         predictedDirection,
-        confidence: Math.round(normalizedConfidence),
-        rawConfidenceScore: confidenceScore,
-        maxConfidenceScore
+        confidence,
+        rawConfidenceScore: aligned,
+        maxConfidenceScore: agreement.length
     };
 }
 
 /************************************
  * Profitability Helpers
  ************************************/
-function determineProfitability(data, formula) {
-    switch (formula) {
-        case 'formula1':
-            return rsiFormula(data[0], data[1].value);
-        case 'formula2':
-            return macdFormula(data[0], data[1].value);
-        case 'formula3':
-            return bollingerBandsFormula(data[0], data[1].value);
-        case 'formula4':
-            return fibonacciRetracementFormula(data[0], data[1].value);
-        case 'formula5':
-            return voscFormula(data[0], data[1].value);
-        default:
-            return 'neutral';
+function determineProfitability(responses, formula) {
+    try {
+        switch (formula) {
+            case 'formula1': { // RSI
+                const cur = responses[0]?.data;               // single object
+                const histVals = valuesFromResults(responses[1], 'value'); // array of numbers
+                return rsiFormula(cur, histVals);
+            }
+            case 'formula2': { // MACD
+                const cur = responses[0]?.data;               // single object with MACD fields
+                const histObjs = objectsFromResults(responses[1]); // array (we reuse slot 2 for MACD hist when called alone)
+                return macdFormula(cur, histObjs);
+            }
+            case 'formula3': { // BB
+                const cur = responses[0]?.data;               // single object
+                const histObjs = objectsFromResults(responses[1]);
+                return bollingerBandsFormula(cur, histObjs, Number(indicatorState.assetPrice));
+            }
+            case 'formula4': { // Fib retracement
+                const cur = responses[0]?.data;
+                return fibonacciRetracementFormula(cur);
+            }
+            case 'formula5': { // VOSC
+                const cur = responses[0]?.data;
+                const histObjs = objectsFromResults(responses[1]);
+                return voscFormula(cur, histObjs);
+            }
+            default:
+                return { direction: 'neutral', value: '00', reason: 'Unknown formula' };
+        }
+    } catch (e) {
+        console.error('determineProfitability error:', e);
+        return { direction: 'neutral', value: '00', reason: 'Evaluator error' };
     }
 }
 
@@ -992,7 +997,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     const humanTime = formatTimestamp(timestamp);
 
     const shouldLogDirection = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2;
-    const highConfidence = confidence >= 80;
+    const highConfidence = confidence >= 30;
 
     if (shouldLogDirection && highConfidence) {
         const prediction = direction === 'rise' ? 'Bullish' : 'Bearish';
@@ -1114,51 +1119,52 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'all') {
         try {
+            // Request set (note: keep response shape compatible with your client)
             const requests = [
+                // RSI current + history
                 axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
                 axios.get(`https://api.taapi.io/rsi?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=30`),
+
+                // MACD current + history
                 axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}`),
                 axios.get(`https://api.taapi.io/macd?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&results=10`),
+
+                // BB current + history
                 axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
                 axios.get(`https://api.taapi.io/bbands?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
+
+                // Fib retracement current (+ optional results unused)
                 axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}`),
                 axios.get(`https://api.taapi.io/fibonacciretracement?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&period=${period}&results=10`),
+
+                // VOSC (current; if you want history, add results=30)
                 axios.get(`https://api.taapi.io/vosc?secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/${pair}&interval=${interval}&short_period=10&long_period=50`)
             ];
 
             const results = await Promise.all(requests);
 
-            const predictions = results
-                .map((resp, index) => {
-                    switch (index) {
-                        case 0:
-                            if (results[1] && results[1].data) return rsiFormula(resp.data, results[1].data.value);
-                            break;
-                        case 1:
-                            return null;
-                        case 2:
-                            if (results[3] && results[3].data) return macdFormula(resp.data, results[1].data.value); // preserve original mapping
-                            break;
-                        case 3:
-                            return null;
-                        case 4:
-                            if (results[5] && results[5].data) return bollingerBandsFormula(resp.data, results[1].data.value);
-                            break;
-                        case 5:
-                            return null;
-                        case 6:
-                            if (results[7] && results[7].data) return fibonacciRetracementFormula(resp.data, results[1].data.value);
-                            break;
-                        case 7:
-                            return null;
-                        case 8:
-                            if (results[8] && results[8].data) return voscFormula(resp.data, results[1].data.value);
-                            break;
-                        default:
-                            return null;
-                    }
-                })
-                .filter((p) => p !== null);
+            // Correct evaluator wiring (each indicator gets its own history)
+            const rsiNow = results[0].data;
+            const rsiHistArr = valuesFromResults(results[1], 'value');
+
+            const macdNow = results[2].data;
+            const macdHistObjs = objectsFromResults(results[3]);
+
+            const bbNow = results[4].data;
+            const bbHistObjs = objectsFromResults(results[5]);
+
+            const fibNow = results[6].data; // price-based
+
+            const voscNow = results[8].data;
+            const voscHist = []; // no extra call here; evaluator handles empty history gracefully
+
+            const predictions = [
+                rsiFormula(rsiNow, rsiHistArr),
+                macdFormula(macdNow, macdHistObjs),
+                bollingerBandsFormula(bbNow, bbHistObjs, Number(indicatorState.assetPrice)),
+                fibonacciRetracementFormula(fibNow),
+                voscFormula(voscNow, voscHist)
+            ];
 
             const overallPrediction = evaluateAssetDirection(predictions);
 
@@ -1176,10 +1182,123 @@ app.post('/check-profitability', async (req, res) => {
                 bollingerBands: predictions[2],
                 fibonacciRetracement: predictions[3],
                 vosc: predictions[4],
-                ema: predictions[5]
+                ema: undefined // unchanged – EMA is its own formulaType
             };
 
-            const targets = estimateTargetPrice(indicatorState.assetPrice, technicalData, patternData, overallPrediction);
+            // --- Human-friendly summary helpers ---------------------------------
+
+            const pretty = (n, d = 2) => (Number.isFinite(n) ? Number(n).toFixed(d) : 'N/A');
+
+            function tagDirection(dir, value) {
+                // Map your encoding to words
+                if (dir === 'rise') return value === -1 ? 'strongly bullish' : 'slightly bullish';
+                if (dir === 'fall') return value === 2 ? 'strongly bearish' : 'slightly bearish';
+                return 'neutral';
+            }
+
+            function rsiBlurb(rsi) {
+                if (!rsi) return null;
+                const v = rsi.RSI;
+                if (!Number.isFinite(v)) return null;
+                if (v >= 70) return 'overbought (can cool off)';
+                if (v <= 30) return 'oversold (can bounce)';
+                if (v > 55) return 'mildly bullish momentum';
+                if (v < 45) return 'mildly bearish momentum';
+                return 'balanced momentum';
+            }
+
+            function macdBlurb(macd) {
+                if (!macd) return null;
+                const strong = macd.value === -1 || macd.value === 2;
+                if (macd.direction === 'rise') return strong ? 'momentum picking up' : 'momentum improving a bit';
+                if (macd.direction === 'fall') return strong ? 'momentum weakening' : 'momentum easing';
+                return 'momentum flat';
+            }
+
+            function bbBlurb(bb) {
+                if (!bb) return null;
+                const b = Number(bb.bandwidth);
+                const p = Number(bb.percentB);
+                if (!Number.isFinite(b) || !Number.isFinite(p)) return null;
+
+                const squeeze = b < 0.06;
+                if (p >= 0.95) return 'near the top of its recent range';
+                if (p <= 0.05) return 'near the bottom of its recent range';
+                if (squeeze) return 'volatility is very low (coiled for a move)';
+                return 'trading inside its recent range';
+            }
+
+            function fibBlurb(fib) {
+                if (!fib) return null;
+                if (fib.retracementLevel >= 75 && fib.direction === 'fall') return 'risk of deeper pullback near 78.6%';
+                if (fib.retracementLevel >= 38 && fib.retracementLevel <= 62) {
+                    return fib.direction === 'rise' ? 'pullback zone that often bounces' : 'rally zone that often stalls';
+                }
+                return null;
+            }
+
+            function voscBlurb(vosc) {
+                if (!vosc) return null;
+                if (vosc.direction === 'rise') return 'buying volume is above typical';
+                if (vosc.direction === 'fall') return 'selling volume is above typical';
+                return 'volume is roughly typical';
+            }
+
+            // Build a single, simple card
+            function buildHumanSummary(symbol, price, technicalData, patternData, targets) {
+                const headDir = targets.predictedDirection; // 'rise' | 'fall' | 'neutral'
+                const headTxt =
+                    headDir === 'rise' ? 'Likely to rise soon'
+                        : headDir === 'fall' ? 'Likely to fall soon'
+                            : 'Likely to stay range-bound';
+
+                const changeTxt = headDir === 'neutral'
+                    ? ''
+                    : `~${pretty(Math.abs(targets.priceChangePercentage), 2)}%`;
+
+                // Short "why" from 2–3 best blurbs
+                const blurbs = [
+                    rsiBlurb(technicalData.rsi),
+                    macdBlurb(technicalData.macd),
+                    bbBlurb(technicalData.bollingerBands),
+                    fibBlurb(technicalData.fibonacciRetracement),
+                    voscBlurb(technicalData.vosc),
+                    patternData?.flagPattern ? (patternData.flagPattern === 'bull' ? 'bull flag detected' : 'bear flag detected') : null
+                ].filter(Boolean);
+
+                const why = blurbs.slice(0, 3).join(' · ');
+
+                // Key levels from BB as simple guardrails
+                const upper = technicalData.bollingerBands?.upperBand;
+                const lower = technicalData.bollingerBands?.lowerBand;
+
+                // Confidence → stars (1–5) for non-technical users
+                const stars = Math.max(1, Math.min(5, Math.round(targets.confidence / 20)));
+
+                return {
+                    symbol,
+                    price: pretty(price, 2),
+                    headline: `${headTxt} ${changeTxt}`.trim(),
+                    confidence: `${targets.confidence}%`,
+                    confidenceStars: '★'.repeat(stars) + '☆'.repeat(5 - stars),
+                    why: why || 'mixed signals',
+                    keyLevels: {
+                        support: Number.isFinite(lower) ? pretty(lower, 2) : 'N/A',
+                        resistance: Number.isFinite(upper) ? pretty(upper, 2) : 'N/A'
+                    },
+                    // Keep an expert string if you want a toggle
+                    expertNote: [
+                        `RSI: ${technicalData.rsi?.RSI ?? 'N/A'}`,
+                        `MACD: ${tagDirection(technicalData.macd?.direction, technicalData.macd?.value)}`,
+                        `BB: %B=${pretty(technicalData.bollingerBands?.percentB)} BW=${pretty(technicalData.bollingerBands?.bandwidth, 3)}`
+                    ].join(' | ')
+                };
+            }
+
+
+            const targets = estimateTargetPrice(indicatorState.assetPrice, technicalData, patternData);
+
+            const friendly = buildHumanSummary(indicatorState.name, indicatorState.assetPrice, technicalData, patternData, targets);
 
             await logBullBear(
                 indicatorState.name,
@@ -1200,7 +1319,8 @@ app.post('/check-profitability', async (req, res) => {
                 indicatorState,
                 { reasons: predictions },
                 { technicalData, patternData, targets },
-                { exchange: settings.exchange }
+                { exchange: settings.exchange },
+                { friendly } // <-- new, human-friendly card
             ]);
         } catch (err) {
             console.error(err);
@@ -1223,19 +1343,20 @@ app.post('/check-profitability', async (req, res) => {
         case 'formula2': // MACD
             endpoint = {
                 ep: `${base}macd?${common}`,
-                ep2: `${base}rsi?${common}&results=10` // preserve original behavior
+                ep2: `${base}macd?${common}&results=10`
             };
             break;
         case 'formula3': // Bollinger Bands
             endpoint = {
                 ep: `${base}bbands?${common}&period=${period}`,
-                ep2: `${base}rsi?${common}&period=${period}&results=10`
+                ep2: `${base}bbands?${common}&period=${period}&results=10`
             };
             break;
         case 'formula4': // Fibonacci retracement
             endpoint = {
                 ep: `${base}fibonacciretracement?${common}&period=${period}`,
-                ep2: `${base}rsi?${common}&period=${period}&results=10`
+                // Optional history unused by evaluator, but keep second call to preserve pattern of two requests
+                ep2: `${base}fibonacciretracement?${common}&period=${period}&results=10`
             };
             break;
         case 'formula5': // VOSC
@@ -1254,9 +1375,8 @@ app.post('/check-profitability', async (req, res) => {
         if (endpoint.ep2) requests.push(axios.get(endpoint.ep2));
 
         const responses = await Promise.all(requests);
-        const data = responses.map((r) => r.data);
 
-        const prediction = determineProfitability(data, formulaType);
+        const prediction = determineProfitability(responses, formulaType);
         resetConsensusCounts();
         return res.json([{ isProfitable: prediction.direction }, indicatorState]);
     } catch (err) {

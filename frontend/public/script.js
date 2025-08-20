@@ -5,6 +5,52 @@ let currentPairIndex = document.getElementById('chooseAsset').selectedIndex
 let isAutoScanning = false;
 let scanInterval;
 
+
+// write HTML instead of plain text
+function updateElementHTML(id, html) {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html ?? '';
+}
+
+// tiny number formatter
+const pretty = (n, d = 2) => (Number.isFinite(+n) ? Number(n).toFixed(d) : 'N/A');
+
+function renderFriendlyCard(friendly) {
+    if (!friendly) { updateElementHTML('result', ''); return; }
+
+    const html = `
+      <div style="border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff;line-height:1.35">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <div style="font-weight:600">${friendly.symbol}</div>
+          <div style="opacity:.75">$${pretty(friendly.price)}</div>
+        </div>
+  
+        <div style="font-size:16px;font-weight:700;margin:4px 0">${friendly.headline}</div>
+  
+        <div style="font-size:12px;color:#666;margin-bottom:8px">
+          Confidence: <strong>${friendly.confidence}</strong>
+          <span style="margin-left:6px">${friendly.confidenceStars}</span>
+        </div>
+  
+        <div style="font-size:13px;margin-bottom:8px">
+          ${friendly.why || 'Mixed signals at the moment.'}
+        </div>
+  
+        <div style="display:flex;gap:16px;font-size:12px;color:#444">
+          <div>Support: <strong>${friendly.keyLevels?.support ?? 'N/A'}</strong></div>
+          <div>Resistance: <strong>${friendly.keyLevels?.resistance ?? 'N/A'}</strong></div>
+        </div>
+  
+        <details style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:12px;color:#666">Advanced</summary>
+          <div style="font-size:12px;color:#555;margin-top:6px">${friendly.expertNote || ''}</div>
+        </details>
+      </div>
+    `;
+    updateElementHTML('result', html);   // reuse your existing #result box
+}
+
+
 // Define functions outside of DOMContentLoaded
 function loadSavedSettings() {
     const savedSettings = localStorage.getItem('cryptoAppSettings');
@@ -497,16 +543,32 @@ async function fetchData(url, body) {
 
 async function processResponse(data) {
     console.log("Show Data:", data);
-    if (Array.isArray(data) && data.length >= 2) {
-        const prediction = data[0].isProfitable;
-        const theReasons = (data[2] !== null && data[2] !== undefined) ? data[2].reasons : null;
-        const theDirection = (data[3] !== null && data[3] !== undefined) ? data[3].targets.predictedDirection : undefined;
-        updateDisplays(data[1], data[3], prediction);
-        updateResultMessage(prediction, data[0], theReasons, theDirection, data[1])
-    } else {
+    if (!Array.isArray(data) || data.length < 2) {
         throw new Error('Unexpected server response format');
     }
+
+    const prediction = data[0]?.isProfitable;
+    const indicatorBag = data[1];                 // indicatorState
+    const bundle = data[3];                 // { technicalData, patternData, targets }
+    const reasons = data[2]?.reasons || null;
+    const direction = bundle?.targets?.predictedDirection;
+
+    // NEW: pick up the friendly summary (server added it as a separate item)
+    const friendlyWrap = data.find(x => x && typeof x === 'object' && 'friendly' in x);
+    const friendly = friendlyWrap?.friendly;
+
+    // existing UI updates
+    updateDisplays(indicatorBag, bundle, prediction);
+
+    // if we have a friendly card from the server, show it instead of raw text
+    if (friendly) {
+        renderFriendlyCard(friendly);
+    } else {
+        // fallback to the old expert line (text-only)
+        updateResultMessage(prediction, data[0], reasons, direction, indicatorBag);
+    }
 }
+
 
 function updateDisplays(data, data2, data3) {
     let consensusTotals = `${data3} - [Rise:${data.rise}, Fall:${data.fall}, Neutral:${data.neutral}]`;
