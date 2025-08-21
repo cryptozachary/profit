@@ -374,50 +374,134 @@ function scoreFromDirection(direction, value) {
     return 0;
 }
 
-function rsiFormula(currentRSI, historicalRSI) {
-    const rsiCur = Number(currentRSI.value);
-    indicatorState.rsiValue = rsiCur;
+// helper: vanilla EMA for arrays
+function ema(arr, len) {
+    if (!Array.isArray(arr) || !arr.length || !Number.isFinite(len) || len < 1) return [];
+    const k = 2 / (len + 1);
+    const out = new Array(arr.length);
+    let prev = arr[0];
+    out[0] = prev;
+    for (let i = 1; i < arr.length; i++) {
+        prev = arr[i] * k + prev * (1 - k);
+        out[i] = prev;
+    }
+    return out;
+}
 
-    const series = Array.isArray(historicalRSI) ? historicalRSI.map(Number) : [];
-    const lastN = series.slice(-20);
-    const mean = lastN.length ? lastN.reduce((s, v) => s + v, 0) / lastN.length : 50;
-    const std = Math.sqrt(lastN.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (lastN.length || 1)) || 1;
+/**
+ * RSI evaluator (adaptive thresholds, hysteresis, EMA confirmation, regime bias)
+ * @param {object} currentRSI  - TAAPI current RSI object: { value }
+ * @param {number[]} historicalRSI - array of past RSI values (numbers)
+ * @param {number} period - RSI lookback period (default 14)
+ */
+function rsiFormula(currentRSI, historicalRSI, period = 14) {
+    const rsiCur = Number(currentRSI?.value);
+    const series = (Array.isArray(historicalRSI) ? historicalRSI : [])
+        .map(Number)
+        .filter(Number.isFinite);
 
-    // Dynamic guardrails around 50; clipped to classic 30/70
-    let upperThreshold = Math.min(70, 50 + 1.25 * std);
-    let lowerThreshold = Math.max(30, 50 - 1.25 * std);
+    // keep state display
+    indicatorState.rsiValue = Number.isFinite(rsiCur) ? rsiCur : '';
 
-    const overboughtDuration = getExtremeRSIDuration(series, upperThreshold, true);
-    const oversoldDuration = getExtremeRSIDuration(series, lowerThreshold, false);
+    if (!Number.isFinite(rsiCur) || !series.length) {
+        return { direction: 'neutral', value: '00', reason: 'RSI data unavailable', RSI: rsiCur ?? 'N/A' };
+    }
 
-    let direction = 'neutral';
-    let value = '00';
-    let reason = `RSI=${rsiCur.toFixed(1)} dyn[${lowerThreshold.toFixed(1)}, ${upperThreshold.toFixed(1)}]`;
+    // --- stats over a rolling window (3×period, min 30, max 200)
+    const win = Math.max(30, Math.min(200, Math.round(period * 3)));
+    const last = series.slice(-win);
+    const mean = last.reduce((s, v) => s + v, 0) / last.length;
+    const variance = last.reduce((s, v) => s + (v - mean) ** 2, 0) / last.length;
+    const std = Math.sqrt(variance) || 1;
+
+    // --- dynamic thresholds ---
+    // period scaling (longer period → tighter moves → slightly narrower bands)
+    const pScale = Math.sqrt(14 / Math.max(5, period)); // 14 as baseline
+    // width from volatility around 50; clamp to [8, 24]
+    const width = Math.max(8, Math.min(24, 1.4 * std * pScale));
+    let upper = Math.min(80, 50 + width / 2);
+    let lower = Math.max(20, 50 - width / 2);
+
+    // regime bias (shift both bands up in bull regimes, down in bear)
+    const regimeUp = mean >= 55, regimeDown = mean <= 45;
+    if (regimeUp) { upper += 2; lower += 2; }
+    if (regimeDown) { upper -= 2; lower -= 2; }
+    upper = Math.min(90, upper);
+    lower = Math.max(10, lower);
+
+    // hysteresis around 50 to reduce whipsaw
+    const midUpper = 52, midLower = 48;
+
+    // RSI-EMA momentum confirmation (half period)
+    const rsiWithCur = [...series, rsiCur];
+    const rsiEmaLen = Math.max(3, Math.round(period / 2));
+    const rsiEmaSeries = ema(rsiWithCur, rsiEmaLen);
+    const rsiEmaCur = rsiEmaSeries.at(-1);
+    const rsiEmaPrev = rsiEmaSeries.at(-2);
+    const emaSlopeUp = rsiEmaCur > rsiEmaPrev;
+    const emaSlopeDn = rsiEmaCur < rsiEmaPrev;
+
+    // durations over/under bands for strength
+    const getDuration = (th, isOver) => {
+        let d = 0;
+        for (let i = rsiWithCur.length - 1; i >= 0; i--) {
+            const v = rsiWithCur[i];
+            if ((isOver && v > th) || (!isOver && v < th)) d++; else break;
+        }
+        return d;
+    };
+    const overboughtDur = getDuration(upper, true);
+    const oversoldDur = getDuration(lower, false);
 
     const prevRSI = series.at(-1) ?? rsiCur;
 
-    if (rsiCur > upperThreshold) {
+    let direction = 'neutral';
+    let value = '00';
+    let reason = `RSI=${rsiCur.toFixed(1)} dyn[${lower.toFixed(1)}, ${upper.toFixed(1)}]`;
+
+    // 1) Extremes → mean reversion bias
+    if (rsiCur > upper) {
         direction = 'fall';
-        value = overboughtDuration >= 3 ? 2 : 1;
-        reason += `; overbought for ${overboughtDuration}`;
-    } else if (rsiCur < lowerThreshold) {
+        value = overboughtDur >= 3 ? 2 : 1;
+        reason += `; overbought ${overboughtDur}`;
+    } else if (rsiCur < lower) {
         direction = 'rise';
-        value = oversoldDuration >= 3 ? -1 : 0;
-        reason += `; oversold for ${oversoldDuration}`;
-    } else if (rsiCur > 50 && rsiCur < prevRSI) {
-        direction = 'fall';
-        value = 1;
-        reason += '; easing from bullish';
-    } else if (rsiCur < 50 && rsiCur > prevRSI) {
-        direction = 'rise';
-        value = 0;
-        reason += '; improving from bearish';
+        value = oversoldDur >= 3 ? -1 : 0;
+        reason += `; oversold ${oversoldDur}`;
     } else {
-        reason += '; neutral';
+        // 2) Mid-zone momentum flips with hysteresis
+        if (rsiCur > midUpper && prevRSI <= midLower) {
+            direction = 'rise'; value = 0; reason += '; momentum flip up';
+        } else if (rsiCur < midLower && prevRSI >= midUpper) {
+            direction = 'fall'; value = 1; reason += '; momentum flip down';
+        } else if (rsiCur > 50 && rsiCur < prevRSI) {
+            direction = 'fall'; value = 1; reason += '; easing from bullish';
+        } else if (rsiCur < 50 && rsiCur > prevRSI) {
+            direction = 'rise'; value = 0; reason += '; improving from bearish';
+        } else {
+            reason += '; neutral';
+        }
     }
 
-    return { direction, value, reason, RSI: rsiCur, upper: upperThreshold, lower: lowerThreshold };
+    // 3) Momentum confirmation by RSI-EMA slope/cross
+    const aboveEma = rsiCur >= rsiEmaCur;
+    const belowEma = rsiCur <= rsiEmaCur;
+    if (direction === 'rise' && aboveEma && emaSlopeUp) {
+        // upgrade strength one notch
+        if (value === 0) value = -1;
+        reason += '; EMA↑ confirm';
+    } else if (direction === 'fall' && belowEma && emaSlopeDn) {
+        if (value === 1) value = 2;
+        reason += '; EMA↓ confirm';
+    }
+
+    // 4) Regime de-emphasis (don’t over-bear in bull regimes, etc.)
+    if (direction === 'fall' && regimeUp && value === 2) { value = 1; reason += '; bull regime dampens'; }
+    if (direction === 'rise' && regimeDown && value === -1) { value = 0; reason += '; bear regime dampens'; }
+
+    return { direction, value, reason, RSI: rsiCur, upper, lower, rsiEma: rsiEmaCur };
 }
+
 
 function macdFormula(current, historyObjs) {
     const M = Number(current.valueMACD);
@@ -474,7 +558,7 @@ function macdFormula(current, historyObjs) {
     return { direction, value, reason };
 }
 
-function bollingerBandsFormula(bbCurrent, bbHistoryObjs, price = Number(indicatorState.assetPrice)) {
+function bollingerBandsFormula(bbCurrent, bbHistoryObjs, price = Number(indicatorState.assetPrice), period = 20) {
     const U = Number(bbCurrent.valueUpperBand);
     const M = Number(bbCurrent.valueMiddleBand);
     const L = Number(bbCurrent.valueLowerBand);
@@ -487,22 +571,38 @@ function bollingerBandsFormula(bbCurrent, bbHistoryObjs, price = Number(indicato
     const bandwidth = band / (M || 1);
     const smaSlope = M - prevM;
 
+    // --- dynamic thresholds ---
+    // overshoot epsilon shrinks for longer periods and expands when bands are tight
+    const epsBase = 0.02 * (20 / Math.max(5, period));             // e.g., ~0.02 at P=20, ~0.01 at P=40
+    const epsVol = Math.max(0.005, Math.min(0.02, bandwidth / 10)); // tighter bands ⇒ slightly larger eps
+    const eps = Math.max(0.005, Math.min(0.03, (epsBase + epsVol) / 2));
+
+    // squeeze threshold from history (20th percentile of recent bandwidths), fallback 0.06
+    const widths = (bbHistoryObjs || [])
+        .map(r => (Number(r.valueUpperBand) - Number(r.valueLowerBand)) / (Number(r.valueMiddleBand) || 1))
+        .filter(Number.isFinite);
+    const recent = widths.slice(-100).sort((a, b) => a - b);
+    const squeezeThresh = recent.length ? recent[Math.floor(0.2 * (recent.length - 1))] : 0.06;
+
+    // normalize slope by band to avoid “NaN”
+    const slopeNorm = (smaSlope) / ((band === 0 ? 1 : band));
+    const slopeStrong = Math.abs(slopeNorm) > 0.1; // tunable
+
     let direction = 'neutral';
     let value = '00';
-    let reason = `%B=${percentB.toFixed(2)} BW=${bandwidth.toFixed(3)} SMAΔ=${smaSlope.toFixed(2)}`;
+    let reason = `%B=${percentB.toFixed(2)} BW=${bandwidth.toFixed(3)} eps=${eps.toFixed(3)}`;
 
-    if (percentB > 1.02) {
+    if (percentB > 1 + eps) {
         direction = 'fall';
         value = 1;
         reason += '; pierce upper → mean revert';
-    } else if (percentB < -0.02) {
+    } else if (percentB < 0 - eps) {
         direction = 'rise';
         value = 0;
         reason += '; pierce lower → mean revert';
     } else {
-        // Squeeze breakout bias
-        const squeeze = bandwidth < 0.06; // tunable
-        if (squeeze && Math.abs(smaSlope) > 0) {
+        const squeeze = bandwidth <= squeezeThresh;
+        if (squeeze && slopeStrong) {
             direction = smaSlope > 0 ? 'rise' : 'fall';
             value = smaSlope > 0 ? 0 : 1;
             reason += `; squeeze→${direction}`;
@@ -513,6 +613,7 @@ function bollingerBandsFormula(bbCurrent, bbHistoryObjs, price = Number(indicato
 
     return { direction, value, reason, percentB, bandwidth, lowerBand: L, upperBand: U };
 }
+
 
 function fibonacciRetracementFormula(frCur) {
     // TAAPI returns a price in `value` and a `trend` with startPrice/endPrice.
@@ -997,7 +1098,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     const humanTime = formatTimestamp(timestamp);
 
     const shouldLogDirection = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2;
-    const highConfidence = confidence >= 30;
+    const highConfidence = confidence >= 80;
 
     if (shouldLogDirection && highConfidence) {
         const prediction = direction === 'rise' ? 'Bullish' : 'Bearish';
@@ -1159,9 +1260,9 @@ app.post('/check-profitability', async (req, res) => {
             const voscHist = []; // no extra call here; evaluator handles empty history gracefully
 
             const predictions = [
-                rsiFormula(rsiNow, rsiHistArr),
+                rsiFormula(rsiNow, rsiHistArr, period),
                 macdFormula(macdNow, macdHistObjs),
-                bollingerBandsFormula(bbNow, bbHistObjs, Number(indicatorState.assetPrice)),
+                bollingerBandsFormula(bbNow, bbHistObjs, Number(indicatorState.assetPrice), period),
                 fibonacciRetracementFormula(fibNow),
                 voscFormula(voscNow, voscHist)
             ];
