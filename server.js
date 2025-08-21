@@ -249,6 +249,15 @@ function objectsFromResults(resp) {
     return Array.isArray(raw) ? raw : [raw];
 }
 
+// ---- Dynamic lookbacks from UI "period" ----
+function deriveDynamicPeriods(p) {
+    const base = Math.max(1, Number(p) || 14);
+    const fib = Math.max(30, Math.min(500, Math.round(base * 6)));   // 6xP, guard rails
+    const flag = Math.max(60, Math.min(1000, Math.round(base * 12)));  // 12xP, guard rails
+    return { fib, flag };
+}
+
+
 /************************************
  * Pattern Rendering
  ************************************/
@@ -1135,7 +1144,7 @@ async function logBullBear(pair, currentPrice, targetPrice, interval, period, di
     const humanTime = formatTimestamp(timestamp);
 
     const shouldLogDirection = direction !== 'neutral' && direction2 !== 'neutral' && direction === direction2;
-    const highConfidence = confidence >= 80;
+    const highConfidence = confidence >= 85;
 
     if (shouldLogDirection && highConfidence) {
         const prediction = direction === 'rise' ? 'Bullish' : 'Bearish';
@@ -1219,7 +1228,8 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'formula7') {
         try {
-            const bearFlagPattern = await getBearFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${period}`);
+            const { flag: flagPeriod } = deriveDynamicPeriods(period);
+            const bearFlagPattern = await getBearFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${flagPeriod}`);
             if (bearFlagPattern.patternFound) await renderFlagPatternCanvas(bearFlagPattern.candleData);
             return res.json([
                 {
@@ -1238,7 +1248,8 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'formula8') {
         try {
-            const bullFlagPattern = await getBullFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${period}`);
+            const { flag: flagPeriod } = deriveDynamicPeriods(period);
+            const bullFlagPattern = await getBullFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${flagPeriod}`);
             if (bullFlagPattern.patternFound) await renderFlagPatternCanvas(bullFlagPattern.candleData);
             return res.json([
                 {
@@ -1257,6 +1268,8 @@ app.post('/check-profitability', async (req, res) => {
 
     if (formulaType === 'all') {
         try {
+            const { fib: fibPeriod, flag: flagPeriod } = deriveDynamicPeriods(period);
+
             // Request set (note: keep response shape compatible with your client)
             const requests = [
                 // RSI current + history
@@ -1309,8 +1322,9 @@ app.post('/check-profitability', async (req, res) => {
 
             const overallPrediction = evaluateAssetDirection(predictions);
 
-            const bullFlagPattern = await getBullFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${period}`);
-            const bearFlagPattern = await getBearFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${period}`);
+            // ✅ Flags use flagPeriod (12×P)
+            const bullFlagPattern = await getBullFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${flagPeriod}`);
+            const bearFlagPattern = await getBearFlagSignal(TAAPI_SECRET, `${runtimeSettings.exchange}`, `${cryptoAsset}/${pair}`, `${interval}`, `${flagPeriod}`);
 
             const patternData = {
                 flagPattern: bullFlagPattern.patternFound ? 'bull' : bearFlagPattern.patternFound ? 'bear' : null,
@@ -1494,13 +1508,14 @@ app.post('/check-profitability', async (req, res) => {
                 ep2: `${base}bbands ? ${common} & period=${period} & results=10`
             };
             break;
-        case 'formula4': // Fibonacci retracement
+        case 'formula4': { // Fibonacci retracement
+            const { fib: fibPeriod } = deriveDynamicPeriods(period);
             endpoint = {
-                ep: `${base}fibonacciretracement ? ${common} & period=${period}`,
-                // Optional history unused by evaluator, but keep second call to preserve pattern of two requests
-                ep2: `${base}fibonacciretracement ? ${common} & period=${period} & results=10`
+                ep: `${base}fibonacciretracement?${common}&period=${fibPeriod}`,
+                ep2: `${base}fibonacciretracement?${common}&period=${fibPeriod}&results=10`
             };
             break;
+        }
         case 'formula5': // VOSC
             endpoint = {
                 ep: `${base}vosc ? ${common} & short_period=10 & long_period=50`,
@@ -1535,10 +1550,11 @@ app.get('/scan/:asset/:currency/', async (req, res) => {
     const pair = `${asset} / ${currency}`;
     const interval = req.query.interval;
     const period = parseInt(req.query.period);
+    const { flag: flagPeriod } = deriveDynamicPeriods(period);
 
     try {
-        const bullResult = await getBullFlagSignal(TAAPI_SECRET, runtimeSettings.exchange, pair, interval, period);
-        const bearResult = await getBearFlagSignal(TAAPI_SECRET, runtimeSettings.exchange, pair, interval, period);
+        const bullResult = await getBullFlagSignal(TAAPI_SECRET, runtimeSettings.exchange, pair, interval, flagPeriod);
+        const bearResult = await getBearFlagSignal(TAAPI_SECRET, runtimeSettings.exchange, pair, interval, flagPeriod);
         const pairData = await getPairData(asset, currency, interval, period);
 
         if (bullResult.patternFound) await logDetectedFlagPattern(pair, 'Bull', bullResult.targetPrice, bullResult.flagpoleHeight);
