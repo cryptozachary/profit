@@ -405,6 +405,7 @@ async function scanNextPair() {
 
 
 async function updateUIWithPairData(pair) {
+    console.log(`pair:${pair}`)
     try {
         const [asset, currency] = pair.split('/');
         const interval = document.querySelector('#interval').value;

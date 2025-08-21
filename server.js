@@ -1077,7 +1077,7 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
 
     const agreement = [
         rsi?.direction, macd?.direction, bollingerBands?.direction,
-        fibonacciRetracement?.direction, vosc?.direction
+        fibonacciRetracement?.direction, vosc?.direction, ema?.direction
     ].filter(Boolean);
 
     const aligned = agreement.filter((d) => d === predictedDirection).length;
@@ -1547,7 +1547,7 @@ app.post('/check-profitability', async (req, res) => {
 app.get('/scan/:asset/:currency/', async (req, res) => {
     const asset = req.params.asset;
     const currency = req.params.currency;
-    const pair = `${asset} / ${currency}`;
+    const pair = `${asset}/${currency}`;
     const interval = req.query.interval;
     const period = parseInt(req.query.period);
     const { flag: flagPeriod } = deriveDynamicPeriods(period);
