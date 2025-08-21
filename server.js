@@ -697,37 +697,66 @@ function voscFormula(cur, histArr = []) {
     return { direction, value, reason, voscValue: v, voscTrend: trend };
 }
 
-async function emaCrossoverFormula(cryptoAsset, interval, period) {
-    const shortPeriod = Number(period);
-    const longPeriod = Number(period) + 14;
+async function emaCrossoverFormula(cryptoAsset, pair, interval, period) {
     const ex = runtimeSettings.exchange;
+    const shortP = Math.max(3, Number(period));
+    const longP = Math.max(shortP + 2, 26);
+    const base = `secret=${TAAPI_SECRET}&exchange=${ex}&symbol=${cryptoAsset}/${pair}&interval=${interval}`;
 
-    const base = `secret=${TAAPI_SECRET}&exchange=${ex}&symbol=${cryptoAsset}/USDT&interval=${interval}`;
+    const fmt = (x, d = 4) => (Number.isFinite(x) ? x.toFixed(d) : 'N/A');
 
     try {
-        const [shortEmaResponse, longEmaResponse] = await Promise.all([
-            axios.get(`https://api.taapi.io/ema?${base}&period=${shortPeriod}&backtrack=0`),
-            axios.get(`https://api.taapi.io/ema?${base}&period=${longPeriod}&results=3&addResultTimestamp=true`)
+        // try results=2 first (cheaper)
+        const [sRes, lRes] = await Promise.all([
+            axios.get(`https://api.taapi.io/ema?${base}&period=${shortP}&results=2`),
+            axios.get(`https://api.taapi.io/ema?${base}&period=${longP}&results=2`)
         ]);
 
-        const currentShortEma = Number(shortEmaResponse?.data?.value);
-        const longArr = Array.isArray(longEmaResponse?.data) ? longEmaResponse.data : [longEmaResponse.data];
-        const currentLongEma = Number(longArr.at(-1)?.value);
-        const previousLongEma = Number(longArr.at(-2)?.value ?? currentLongEma);
+        const arr = x => Array.isArray(x?.data) ? x.data : (x?.data ? [x.data] : []);
+        let sArr = arr(sRes), lArr = arr(lRes);
 
-        indicatorState.emaValue = `CShort: ${currentShortEma.toFixed(4)} CLong: ${currentLongEma.toFixed(4)} PrevLong: ${previousLongEma.toFixed(4)}`;
+        // fallback if we didn't get 2 points
+        if (sArr.length < 2 || lArr.length < 2) {
+            const [sNow, sPrev, lNow, lPrev] = await Promise.all([
+                axios.get(`https://api.taapi.io/ema?${base}&period=${shortP}`),
+                axios.get(`https://api.taapi.io/ema?${base}&period=${shortP}&backtrack=1`),
+                axios.get(`https://api.taapi.io/ema?${base}&period=${longP}`),
+                axios.get(`https://api.taapi.io/ema?${base}&period=${longP}&backtrack=1`)
+            ]);
+            sArr = [sPrev.data, sNow.data];
+            lArr = [lPrev.data, lNow.data];
+        }
 
-        const crossedUp = currentShortEma > currentLongEma && previousLongEma >= currentLongEma ? true : false;
-        const crossedDn = currentShortEma < currentLongEma && previousLongEma <= currentLongEma ? true : false;
-        const leSlopeUp = currentLongEma > previousLongEma;
-        const leSlopeDn = currentLongEma < previousLongEma;
+        const prevShort = Number(sArr.at(-2)?.value);
+        const currShort = Number(sArr.at(-1)?.value);
+        const prevLong = Number(lArr.at(-2)?.value);
+        const currLong = Number(lArr.at(-1)?.value);
 
-        if ((currentShortEma > currentLongEma) && leSlopeUp) return { direction: 'rise', value: 0, reason: 'Golden cross + long EMA rising' };
-        if ((currentShortEma < currentLongEma) && leSlopeDn) return { direction: 'fall', value: 1, reason: 'Death cross + long EMA falling' };
-        return { direction: 'neutral', value: '00', reason: 'No confirmed cross' };
+        indicatorState.emaValue =
+            `S:${fmt(currShort)} L:${fmt(currLong)} prevS:${fmt(prevShort)} prevL:${fmt(prevLong)}`;
+
+        // guard: if any is not finite, bail neutral with reason
+        if ([prevShort, currShort, prevLong, currLong].some(v => !Number.isFinite(v))) {
+            return { direction: 'neutral', value: '00', reason: 'EMA data unavailable' };
+        }
+
+        // proper cross
+        const crossUp = prevShort <= prevLong && currShort > currLong;
+        const crossDn = prevShort >= prevLong && currShort < currLong;
+        const longUp = currLong > prevLong;
+        const longDn = currLong < prevLong;
+
+        if (crossUp || (currShort > currLong && longUp)) {
+            return { direction: 'rise', value: 0, reason: crossUp ? 'Golden cross' : 'Short>Long & Long EMA rising' };
+        }
+        if (crossDn || (currShort < currLong && longDn)) {
+            return { direction: 'fall', value: 1, reason: crossDn ? 'Death cross' : 'Short<Long & Long EMA falling' };
+        }
+        return { direction: 'neutral', value: '00', reason: 'No clear cross' };
     } catch (err) {
-        console.error(err);
-        throw new Error('Failed to retrieve EMA data (function): ' + JSON.stringify(err?.response?.data ?? err.message));
+        console.error('EMA error:', err?.response?.data ?? err.message);
+        indicatorState.emaValue = 'S:N/A L:N/A prevS:N/A prevL:N/A';
+        return { direction: 'neutral', value: '00', reason: 'EMA request failed' };
     }
 }
 
@@ -990,7 +1019,8 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
         macd,
         bollingerBands,
         fibonacciRetracement,
-        vosc
+        vosc,
+        ema
     } = technicalData;
 
     const { flagPattern, flagpoleHeight } = patternData;
@@ -1003,6 +1033,13 @@ function estimateTargetPrice(currentPrice, technicalData, patternData) {
     if (bollingerBands) push(1.2, bollingerBands.direction, bollingerBands.value);
     if (fibonacciRetracement) push(0.8, fibonacciRetracement.direction, fibonacciRetracement.value);
     if (vosc) push(0.7, vosc.direction, vosc.value);
+    if (ema) push(0.8, ema.direction, ema.value);
+
+    // bonus if both are bullish or both bearish
+    if (ema && macd && ema.direction !== 'neutral' && macd.direction === ema.direction) {
+        parts.push(0.1 * (ema.direction === 'rise' ? 1 : -1)); // small nudge
+    }
+
 
     let sumW = 0;
     let sum = 0;
@@ -1259,12 +1296,15 @@ app.post('/check-profitability', async (req, res) => {
             const voscNow = results[8].data;
             const voscHist = []; // no extra call here; evaluator handles empty history gracefully
 
+            const emaPred = await emaCrossoverFormula(cryptoAsset, pair, interval, period);
+
             const predictions = [
                 rsiFormula(rsiNow, rsiHistArr, period),
                 macdFormula(macdNow, macdHistObjs),
                 bollingerBandsFormula(bbNow, bbHistObjs, Number(indicatorState.assetPrice), period),
                 fibonacciRetracementFormula(fibNow),
-                voscFormula(voscNow, voscHist)
+                voscFormula(voscNow, voscHist),
+                emaPred
             ];
 
             const overallPrediction = evaluateAssetDirection(predictions);
@@ -1283,7 +1323,7 @@ app.post('/check-profitability', async (req, res) => {
                 bollingerBands: predictions[2],
                 fibonacciRetracement: predictions[3],
                 vosc: predictions[4],
-                ema: undefined // unchanged – EMA is its own formulaType
+                ema: predictions[5]
             };
 
             // --- Human-friendly summary helpers ---------------------------------
@@ -1391,7 +1431,8 @@ app.post('/check-profitability', async (req, res) => {
                     expertNote: [
                         `RSI: ${technicalData.rsi?.RSI ?? 'N/A'}`,
                         `MACD: ${tagDirection(technicalData.macd?.direction, technicalData.macd?.value)}`,
-                        `BB: %B=${pretty(technicalData.bollingerBands?.percentB)} BW=${pretty(technicalData.bollingerBands?.bandwidth, 3)}`
+                        `BB: %B=${pretty(technicalData.bollingerBands?.percentB)} BW=${pretty(technicalData.bollingerBands?.bandwidth, 3)}`,
+                        `EMA: ${technicalData.ema ? (technicalData.ema.direction) : 'N/A'}`,
                     ].join(' | ')
                 };
             }
@@ -1432,38 +1473,38 @@ app.post('/check-profitability', async (req, res) => {
     // Specific indicator endpoint mapping
     let endpoint = '';
     const base = 'https://api.taapi.io/';
-    const common = `secret=${TAAPI_SECRET}&exchange=${settings.exchange}&symbol=${cryptoAsset}/USDT&interval=${interval}`;
+    const common = `secret = ${TAAPI_SECRET} & exchange=${settings.exchange} & symbol=${cryptoAsset} / USDT & interval=${interval}`;
 
     switch (formulaType) {
         case 'formula1': // RSI
             endpoint = {
-                ep: `${base}rsi?${common}&period=${period}`,
-                ep2: `${base}rsi?${common}&period=${period}&results=30`
+                ep: `${base}rsi ? ${common} & period=${period}`,
+                ep2: `${base}rsi ? ${common} & period=${period} & results=30`
             };
             break;
         case 'formula2': // MACD
             endpoint = {
-                ep: `${base}macd?${common}`,
-                ep2: `${base}macd?${common}&results=10`
+                ep: `${base}macd ? ${common}`,
+                ep2: `${base}macd ? ${common} & results=10`
             };
             break;
         case 'formula3': // Bollinger Bands
             endpoint = {
-                ep: `${base}bbands?${common}&period=${period}`,
-                ep2: `${base}bbands?${common}&period=${period}&results=10`
+                ep: `${base}bbands ? ${common} & period=${period}`,
+                ep2: `${base}bbands ? ${common} & period=${period} & results=10`
             };
             break;
         case 'formula4': // Fibonacci retracement
             endpoint = {
-                ep: `${base}fibonacciretracement?${common}&period=${period}`,
+                ep: `${base}fibonacciretracement ? ${common} & period=${period}`,
                 // Optional history unused by evaluator, but keep second call to preserve pattern of two requests
-                ep2: `${base}fibonacciretracement?${common}&period=${period}&results=10`
+                ep2: `${base}fibonacciretracement ? ${common} & period=${period} & results=10`
             };
             break;
         case 'formula5': // VOSC
             endpoint = {
-                ep: `${base}vosc?${common}&short_period=10&long_period=50`,
-                ep2: `${base}vosc?${common}&short_period=10&long_period=50&results=10`
+                ep: `${base}vosc ? ${common} & short_period=10 & long_period=50`,
+                ep2: `${base}vosc ? ${common} & short_period=10 & long_period=50 & results=10`
             };
             break;
         default:
@@ -1491,7 +1532,7 @@ app.post('/check-profitability', async (req, res) => {
 app.get('/scan/:asset/:currency/', async (req, res) => {
     const asset = req.params.asset;
     const currency = req.params.currency;
-    const pair = `${asset}/${currency}`;
+    const pair = `${asset} / ${currency}`;
     const interval = req.query.interval;
     const period = parseInt(req.query.period);
 
