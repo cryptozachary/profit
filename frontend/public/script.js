@@ -15,7 +15,7 @@ function updateElementHTML(id, html) {
 // tiny number formatter
 const pretty = (n, d = 2) => (Number.isFinite(+n) ? Number(n).toFixed(d) : 'N/A');
 
-function renderFriendlyCard(friendly) {
+function renderFriendlyCard(friendly, target) {
     if (!friendly) { updateElementHTML('result', ''); return; }
 
     const html = `
@@ -37,6 +37,7 @@ function renderFriendlyCard(friendly) {
         </div>
   
         <div style="display:flex;gap:16px;font-size:12px;color:#444">
+        <div>Target Price: $<strong>${target ?? 'N/A'}</strong></div>
           <div>Support: <strong>${friendly.keyLevels?.support ?? 'N/A'}</strong></div>
           <div>Resistance: <strong>${friendly.keyLevels?.resistance ?? 'N/A'}</strong></div>
         </div>
@@ -552,6 +553,8 @@ async function processResponse(data) {
     const indicatorBag = data[1];                 // indicatorState
     const bundle = data[3];                 // { technicalData, patternData, targets }
     const reasons = data[2]?.reasons || null;
+    const targetPrice = data[3]?.targets?.targetPrice
+    const roundedTargetPrice = parseFloat(targetPrice?.toFixed(2))
     const direction = bundle?.targets?.predictedDirection;
 
     // NEW: pick up the friendly summary (server added it as a separate item)
@@ -563,7 +566,7 @@ async function processResponse(data) {
 
     // if we have a friendly card from the server, show it instead of raw text
     if (friendly) {
-        renderFriendlyCard(friendly);
+        renderFriendlyCard(friendly, roundedTargetPrice);
     } else {
         // fallback to the old expert line (text-only)
         updateResultMessage(prediction, data[0], reasons, direction, indicatorBag);
@@ -576,7 +579,7 @@ function updateDisplays(data, data2, data3) {
 
     updateElementText('assetName', data.name.toUpperCase());
     updateElementText('assetPriceDisplay', data.assetPrice);
-    updateElementText('rsiValue', data.rsiValue);
+    updateElementText('rsiValue', parseFloat(data.rsiValue.toFixed(2)));
     updateElementText('volumeValue', data.volumeValue);
     updateElementText('fibonacciValue', data.fibonValue);
     updateElementText('emaValue', data.emaValue);
@@ -590,7 +593,7 @@ function updateDisplays(data, data2, data3) {
     if (data2) {
         let singularScore = `${data2.targets.predictedDirection} - [Confidence:${data2.targets.confidence}]`;
         console.log(data2)
-        updateElementText('targetValue', data2.targets.targetPrice);
+        updateElementText('targetValue', parseFloat(data2.targets.targetPrice.toFixed(2)));
         updateElementText('percentageValue', data2.targets.priceChangePercentage);
         //updateElementText('confidenceValue', data2.targets.confidence);
         updateElementText('consensusValue', consensusTotals);

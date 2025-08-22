@@ -1443,7 +1443,7 @@ app.post('/check-profitability', async (req, res) => {
                     },
                     // Keep an expert string if you want a toggle
                     expertNote: [
-                        `RSI: ${technicalData.rsi?.RSI ?? 'N/A'}`,
+                        `RSI: ${parseFloat(technicalData.rsi?.RSI.toFixed(2)) ?? 'N/A'}`,
                         `MACD: ${tagDirection(technicalData.macd?.direction, technicalData.macd?.value)}`,
                         `BB: %B=${pretty(technicalData.bollingerBands?.percentB)} BW=${pretty(technicalData.bollingerBands?.bandwidth, 3)}`,
                         `EMA: ${technicalData.ema ? (technicalData.ema.direction) : 'N/A'}`,
