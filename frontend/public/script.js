@@ -38,8 +38,8 @@ function renderFriendlyCard(friendly, target) {
   
         <div style="display:flex;gap:16px;font-size:12px;color:#444">
         <div>Target Price: $<strong>${target ?? 'N/A'}</strong></div>
-          <div>Support: <strong>${friendly.keyLevels?.support ?? 'N/A'}</strong></div>
-          <div>Resistance: <strong>${friendly.keyLevels?.resistance ?? 'N/A'}</strong></div>
+          <div>Support: $<strong>${friendly.keyLevels?.support ?? 'N/A'}</strong></div>
+          <div>Resistance: $<strong>${friendly.keyLevels?.resistance ?? 'N/A'}</strong></div>
         </div>
   
         <details style="margin-top:8px">
