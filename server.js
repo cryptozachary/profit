@@ -15,7 +15,7 @@ const express = require('express');
 const axios = require('axios');
 const nodemailer = require('nodemailer');
 const mongoose = require('mongoose');
-const { createCanvas } = require('canvas');
+//const { createCanvas } = require('canvas');
 const fsStream = require('fs');
 require('dotenv').config();
 
